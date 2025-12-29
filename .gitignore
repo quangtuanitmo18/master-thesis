@@ -265,8 +265,8 @@ OpenVuln/results/*
 !OpenVuln/results/.gitkeep
 
 # Input files (generated during analysis)
-**/input_files/sarif_results/*
-!**/input_files/sarif_results/.gitkeep
+# **/input_files/sarif_results/*
+# !**/input_files/sarif_results/.gitkeep
 
 # Configuration files with sensitive data
 *.ini

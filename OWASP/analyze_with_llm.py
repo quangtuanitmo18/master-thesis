@@ -1,13 +1,15 @@
+import json
 import os
 import sys
-import json
-import tiktoken
 import time
-from typing import List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple
 
+import tiktoken
+from llm_api_handler import (send_to_llm, test_model_connectivity,
+                             validate_api_key)
 from reusables.argument import Arguments
-from llm_api_handler import send_to_llm, test_model_connectivity, validate_api_key
+
 
 def extract_location_info(location_obj):
     region = location_obj.get("region", {})
@@ -450,7 +452,7 @@ def process_batch(batch: List[Tuple[str, str, str, str]], model: str, temperatur
                 pf.write(prompt)
             
             # Send to LLM
-            response = send_to_llm(prompt, model, temperature, enable_token_counting)
+            response = send_to_llm(prompt, model, temperature, enable_token_counting, max_tokens=4096)
             
             # Save response to file
             response_path = os.path.join(responses_dir, f"{filename_stub}.txt")
