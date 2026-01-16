@@ -5,8 +5,11 @@ Handles all interactions with OpenAI API and OpenRouter for security analysis.
 Supports model-specific parameters and configurations.
 """
 
+import json
 import os
+import re
 import sys
+import time
 
 import tiktoken
 from openai import OpenAI
@@ -687,6 +690,47 @@ MODEL_CONFIGS = {
         "tokenizer": "gpt-4",
         "description": "OpenAI GPT-OSS 20B model with full parameter support",
         "provider": "openrouter"
+    },
+    # CLIProxyAPI Models (local proxy)
+    "gemini-2.5-pro": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Google Gemini 2.5 Pro via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-2.5-flash": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Google Gemini 2.5 Flash via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-2.5-flash-lite": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Google Gemini 2.5 Flash Lite via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-3-pro-preview": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Google Gemini 3 Pro Preview via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-3-flash-preview": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Google Gemini 3 Flash Preview via CLIProxyAPI",
+        "provider": "cliproxyapi"
     }
 }
 
@@ -710,6 +754,25 @@ def is_openai_model(model: str) -> bool:
     # Check provider field in model configuration
     config = get_model_config(model)
     return config.get("provider", "openai") == "openai"
+
+def is_cliproxyapi_model(model: str) -> bool:
+    """
+    Check if a model should use CLIProxyAPI (local proxy server).
+    
+    Models with prefix "cliproxy:" will use CLIProxyAPI.
+    This allows easy routing to local CLIProxyAPI instance.
+    
+    Args:
+        model (str): Model name
+        
+    Returns:
+        bool: True if model should use CLIProxyAPI, False otherwise
+    """
+    # Use prefix "cliproxy:" to indicate CLIProxyAPI models
+    if model.startswith("cliproxy:"):
+        return True
+    
+    return False
 
 def get_model_config(model: str) -> dict:
     """
@@ -870,12 +933,14 @@ def send_to_llm(prompt, model, temperature=None, enable_token_counting=True, **k
     """
     Main entry point for sending prompts to LLM APIs.
     
-    This function routes requests to the appropriate API provider (OpenAI or OpenRouter)
-    based on the model. It handles special cases like o3-pro which uses a different API.
+    This function routes requests to the appropriate API provider:
+    - OpenAI (for OpenAI models)
+    - OpenRouter (for models via OpenRouter)
+    - CLIProxyAPI (for local proxy, models with "cliproxy:" prefix)
     
     Args:
         prompt (str): The prompt text to send to the LLM
-        model (str): Model name (e.g., "gpt-4o", "deepseek/deepseek-r1", "o3-pro")
+        model (str): Model name (e.g., "gpt-4o", "deepseek/deepseek-r1", "o3-pro", "cliproxy:gpt-4o")
         temperature (float, optional): Temperature for response generation (0.0-2.0)
                                        Lower = more deterministic, Higher = more creative
         enable_token_counting (bool): Whether to count tokens and calculate cost
@@ -892,11 +957,18 @@ def send_to_llm(prompt, model, temperature=None, enable_token_counting=True, **k
     Note:
         - OpenAI models: Uses standard OpenAI API
         - OpenRouter models: Routes through OpenRouter API (supports many providers)
+        - CLIProxyAPI models: Routes through local CLIProxyAPI (models with "cliproxy:" prefix)
         - o3-pro: Uses special OpenAI response API (not chat completion)
     """
     # Special handling for o3-pro model (uses response API instead of chat completion)
     if model == "o3-pro":
         return send_to_o3_pro(prompt, model, temperature, enable_token_counting, **kwargs)
+    
+    # Check if model should use CLIProxyAPI (local proxy) - check this before OpenAI/OpenRouter
+    if is_cliproxyapi_model(model):
+        # Remove "cliproxy:" prefix if present
+        actual_model = model.replace("cliproxy:", "")
+        return send_to_cliproxyapi(prompt, actual_model, temperature, enable_token_counting, **kwargs)
     
     # Route to appropriate provider based on model configuration
     if is_openai_model(model):
@@ -1261,6 +1333,226 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
     
     return response.output_text
 
+def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=True, **kwargs):
+    """
+    Send a prompt to CLIProxyAPI (local proxy server).
+    
+    CLIProxyAPI is a local proxy service that provides unified access to multiple LLM providers.
+    This function connects to a local instance running on http://127.0.0.1:8317/v1
+    
+    Includes automatic retry logic with exponential backoff for rate limit errors (429).
+    
+    Args:
+        prompt (str): The prompt to send
+        model (str): The model to use (model name as understood by CLIProxyAPI)
+        temperature (float, optional): Temperature for response generation
+        enable_token_counting (bool): Whether to count tokens and calculate cost
+        **kwargs: Additional model-specific parameters (max_tokens, top_p, etc.)
+    
+    Returns:
+        str: The response from the model
+    """
+    try:
+        # Create CLIProxyAPI client pointing to local server
+        # Hard-coded for local development
+        client = OpenAI(
+            base_url="http://127.0.0.1:8317/v1",  # Local CLIProxyAPI endpoint
+            api_key="your-api-key-1",  # Hard-coded API key for local use
+            timeout=30.0,  # 30 second timeout
+            max_retries=2  # Retry up to 2 times on transient failures
+        )
+    except Exception as e:
+        print(f"Error creating CLIProxyAPI client: {e}")
+        print("This might be due to network issues or the local server not running.")
+        print("Make sure CLIProxyAPI is running on http://127.0.0.1:8317")
+        raise
+    
+    # Validate and normalize parameters for the specific model
+    # CLIProxyAPI models may not be in MODEL_CONFIGS, so use default parameters if validation fails
+    validated_params = {}
+    try:
+        params = {'temperature': temperature} if temperature is not None else {}
+        params.update(kwargs)
+        validated_params = validate_model_parameters(model, **params)
+    except ValueError as e:
+        # If model not in config, use default parameters (CLIProxyAPI will handle validation)
+        print(f"Warning: Model '{model}' not in config, using default parameters: {e}")
+        # Use default parameters that work with most models
+        if temperature is not None:
+            validated_params['temperature'] = temperature
+        if 'max_tokens' in kwargs:
+            validated_params['max_tokens'] = kwargs['max_tokens']
+        # Add other common parameters
+        for param in ['top_p', 'frequency_penalty', 'presence_penalty']:
+            if param in kwargs:
+                validated_params[param] = kwargs[param]
+    
+    # Initialize token counts for cost tracking
+    input_tokens = None
+    output_tokens = None
+    cost = None
+    
+    # Count input tokens if enabled (for cost estimation)
+    if enable_token_counting:
+        try:
+            input_tokens = count_tokens(prompt, model)
+        except Exception as e:
+            print(f"Warning: Could not count input tokens: {e}")
+            input_tokens = None
+    
+    # Prepare API call parameters in OpenAI-compatible format
+    # CLIProxyAPI uses the same API format as OpenAI for compatibility
+    # Ensure stream is always False (non-streaming mode)
+    api_params = {
+        "model": model,  # Model name as understood by CLIProxyAPI
+        "messages": [
+            {"role": "system", "content": "You are a security assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        # **validated_params,  # Include validated parameters first
+        "stream": False  # Explicitly disable streaming (CLIProxyAPI requires non-streaming for this use case)
+        # Put stream last to ensure it's always False, even if validated_params has stream
+    }
+    
+    # Retry logic with exponential backoff for rate limit errors
+    max_retries = 5
+    base_delay = 2  # Base delay in seconds
+    max_delay = 60  # Maximum delay in seconds
+    response = None
+    
+    for attempt in range(max_retries):
+        try:
+            # Make the API call to CLIProxyAPI
+            response = client.chat.completions.create(**api_params)
+            
+            # Success - break out of retry loop
+            break
+            
+        except Exception as e:
+            # Check if it's a rate limit error (429)
+            is_rate_limit = False
+            retry_after = None
+            error_detail = None
+            
+            # Try to extract error details
+            if hasattr(e, 'response'):
+                try:
+                    if hasattr(e.response, 'json'):
+                        error_detail = e.response.json()
+                    elif hasattr(e.response, 'text'):
+                        try:
+                            # Try to parse as JSON first
+                            error_detail = json.loads(e.response.text) if e.response.text else None
+                        except (json.JSONDecodeError, ValueError):
+                            # If not JSON, keep as string
+                            error_detail = e.response.text
+                except:
+                    pass
+            
+            # Check error message/code for rate limit
+            error_msg = str(e)
+            if '429' in error_msg or 'rate limit' in error_msg.lower() or 'RATE_LIMIT' in error_msg:
+                is_rate_limit = True
+            elif error_detail:
+                # Check error_detail dict for rate limit indicators
+                if isinstance(error_detail, dict):
+                    error_obj = error_detail.get('error', {})
+                    if error_obj.get('code') == 429 or 'RATE_LIMIT' in str(error_obj) or 'RESOURCE_EXHAUSTED' in str(error_obj):
+                        is_rate_limit = True
+                        # Try to extract retry-after time from message
+                        message = error_obj.get('message', '')
+                        if 'reset after' in message.lower() or 'quota will reset' in message.lower():
+                            # Extract time like "reset after 2s" or "quota will reset after 2s"
+                            match = re.search(r'reset after (\d+)s?', message.lower())
+                            if match:
+                                retry_after = int(match.group(1))
+                elif isinstance(error_detail, str):
+                    if '429' in error_detail or 'rate limit' in error_detail.lower():
+                        is_rate_limit = True
+            
+            # If rate limit error and not last attempt, retry with backoff
+            if is_rate_limit and attempt < max_retries - 1:
+                # Calculate delay: use retry_after if available, otherwise exponential backoff
+                if retry_after:
+                    delay = min(retry_after + 1, max_delay)  # Add 1 second buffer
+                else:
+                    delay = min(base_delay * (2 ** attempt), max_delay)  # Exponential backoff
+                
+                print(f"⚠️ Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {delay}s before retry...")
+                if retry_after:
+                    print(f"   Server indicates quota resets after {retry_after}s")
+                time.sleep(delay)
+                continue
+            else:
+                # Not a rate limit error, or last attempt - raise the error
+                # Better error handling to show full error details
+                error_msg = str(e)
+                if error_detail:
+                    print(f"Error making CLIProxyAPI call: {error_detail}")
+                else:
+                    print(f"Error making CLIProxyAPI call: {error_msg}")
+                print("This might be due to network issues, API key problems, or the server not running.")
+                print("Make sure CLIProxyAPI is running on http://127.0.0.1:8317")
+                print(f"Endpoint: http://127.0.0.1:8317/v1/chat/completions")
+                print(f"API Key: your-api-key-1")
+                raise
+    
+    # If we exhausted all retries without success, raise an error
+    if response is None:
+        raise Exception("Failed to get response from CLIProxyAPI after all retry attempts")
+    
+    # Count output tokens if enabled (for cost estimation)
+    if enable_token_counting:
+        try:
+            output_tokens = count_tokens(response.choices[0].message.content, model)
+        except Exception as e:
+            print(f"Warning: Could not count output tokens: {e}")
+            output_tokens = None
+    
+    # Calculate cost if we have token counts
+    if input_tokens is not None and output_tokens is not None:
+        try:
+            cost = calculate_cost(input_tokens, output_tokens, model)
+        except Exception as e:
+            print(f"Warning: Could not calculate cost: {e}")
+            cost = None
+    
+    # Print token usage and cost information in a formatted way
+    print("\n" + "="*50)
+    print(f"CLIProxyAPI Call Summary (Model: {model})")
+    print("-"*50)
+    if input_tokens is not None:
+        print(f"Input tokens:  {input_tokens:>8}")
+    else:
+        print(f"Input tokens:  {'N/A':>8} (counting disabled/failed)")
+    
+    if output_tokens is not None:
+        print(f"Output tokens: {output_tokens:>8}")
+    else:
+        print(f"Output tokens: {'N/A':>8} (counting disabled/failed)")
+    
+    if input_tokens is not None and output_tokens is not None:
+        print(f"Total tokens:  {input_tokens + output_tokens:>8}")
+    else:
+        print(f"Total tokens:  {'N/A':>8} (counting disabled/failed)")
+    
+    print("-"*50)
+    if cost is not None:
+        print(f"Estimated cost: ${cost:.4f}")
+    else:
+        print(f"Estimated cost: N/A (counting disabled/failed)")
+    
+    # Print model-specific information
+    try:
+        config = get_model_config(model)
+        print(f"Model config: {config['description']}")
+    except:
+        print(f"Model config: Using CLIProxyAPI local proxy")
+    print(f"Parameters used: {validated_params}")
+    print("="*50 + "\n")
+    
+    return response.choices[0].message.content
+
 def list_supported_models():
     """
     List all supported models with their configurations.
@@ -1307,10 +1599,22 @@ def test_model_connectivity(model_name="gpt-4o"):
         bool: True if successful, False otherwise
     """
     try:
+        # Check CLIProxyAPI models first (skip config validation)
+        if is_cliproxyapi_model(model_name):
+            client = OpenAI(
+                base_url="http://127.0.0.1:8317/v1",
+                api_key="your-api-key-1",
+                timeout=10.0
+            )
+            print("✓ CLIProxyAPI client created successfully")
+            return True
+        
+        # Check OpenAI models
         if is_openai_model(model_name):
             client = OpenAI(timeout=10.0)
             print("✓ OpenAI client created successfully")
         else:
+            # OpenRouter models
             client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=os.getenv('OPENROUTER_API_KEY'),
