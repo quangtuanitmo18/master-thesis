@@ -7,10 +7,14 @@ Supports model-specific parameters and configurations.
 
 import os
 import sys
+
 import tiktoken
 from openai import OpenAI
 
 # Model pricing information
+# Dictionary mapping model names to their pricing per 1K tokens
+# Used for cost estimation when token counting is enabled
+# Pricing is in USD per 1K tokens (input and output separately)
 MODEL_PRICING = {
     # OpenAI Models
     "gpt-5": {
@@ -242,6 +246,13 @@ MODEL_PRICING = {
 }
 
 # Model-specific configurations
+# Dictionary containing model-specific settings including:
+# - max_temperature: Maximum temperature value allowed (some models have limits)
+# - default_temperature: Default temperature if not specified
+# - supported_parameters: List of API parameters this model supports
+# - tokenizer: Which tokenizer to use for token counting (usually "gpt-4" as approximation)
+# - description: Human-readable description of the model
+# - provider: API provider ("openai" or "openrouter")
 MODEL_CONFIGS = {
     # OpenAI Models
     "gpt-5": {
@@ -681,33 +692,47 @@ MODEL_CONFIGS = {
 
 def is_openai_model(model: str) -> bool:
     """
-    Check if a model is an OpenAI model.
+    Check if a model is an OpenAI model (vs OpenRouter).
+    
+    This determines which API endpoint to use. OpenAI models use the standard
+    OpenAI API, while other models (DeepSeek, Gemini, etc.) go through OpenRouter.
     
     Args:
-        model (str): Model name
+        model (str): Model name (e.g., "gpt-4o", "deepseek/deepseek-r1")
         
     Returns:
-        bool: True if it's an OpenAI model, False otherwise
+        bool: True if it's an OpenAI model, False if it uses OpenRouter
     """
-    # Special case: o3-pro uses OpenAI API but has special handling
+    # Special case: o3-pro uses OpenAI API but requires special handling (response API)
     if model == "o3-pro":
         return True
     
+    # Check provider field in model configuration
     config = get_model_config(model)
     return config.get("provider", "openai") == "openai"
 
 def get_model_config(model: str) -> dict:
     """
-    Get configuration for a specific model.
+    Get configuration dictionary for a specific model.
+    
+    Retrieves model-specific settings like temperature limits, supported parameters,
+    tokenizer type, and API provider. Used throughout the module for parameter validation
+    and API routing.
     
     Args:
-        model (str): Model name
+        model (str): Model name (must be a key in MODEL_CONFIGS)
         
     Returns:
-        dict: Model configuration
+        dict: Model configuration containing:
+            - max_temperature: Maximum allowed temperature
+            - default_temperature: Default temperature value
+            - supported_parameters: List of supported API parameters
+            - tokenizer: Tokenizer name for token counting
+            - description: Model description
+            - provider: API provider ("openai" or "openrouter")
         
     Raises:
-        ValueError: If model is not supported
+        ValueError: If model is not found in MODEL_CONFIGS
     """
     if model not in MODEL_CONFIGS:
         raise ValueError(f"Model '{model}' is not supported. Supported models: {list(MODEL_CONFIGS.keys())}")
@@ -716,99 +741,164 @@ def get_model_config(model: str) -> dict:
 
 def validate_model_parameters(model: str, **kwargs) -> dict:
     """
-    Validate and normalize parameters for a specific model.
+    Validate and normalize API parameters for a specific model.
+    
+    Different models support different parameters and have different limits.
+    This function:
+    1. Validates temperature is within model's allowed range
+    2. Maps max_tokens to max_completion_tokens for models that require it (o1, o3 series)
+    3. Filters out unsupported parameters
+    4. Applies default values where appropriate
     
     Args:
         model (str): Model name
-        **kwargs: Parameters to validate
+        **kwargs: Parameters to validate (temperature, max_tokens, top_p, etc.)
         
     Returns:
-        dict: Validated and normalized parameters
+        dict: Validated and normalized parameters ready for API call
         
     Raises:
-        ValueError: If parameters are invalid for the model
+        ValueError: If temperature is out of allowed range
     """
     config = get_model_config(model)
     validated_params = {}
     
-    # Only add temperature if supported
+    # Only add temperature if supported by the model
+    # Some models (o1, o3 series) don't support temperature parameter
     if 'temperature' in config['supported_parameters']:
         if 'temperature' in kwargs:
             temp = kwargs['temperature']
             max_temp = config['max_temperature']
+            # Validate temperature is within allowed range
             if not (0 <= temp <= max_temp):
                 raise ValueError(f"Temperature must be between 0 and {max_temp} for model {model}. Got: {temp}")
             validated_params['temperature'] = temp
         else:
+            # Use default temperature if not specified
             validated_params['temperature'] = config['default_temperature']
     
     # Map max_tokens to max_completion_tokens for models that require it
+    # OpenAI o1/o3 series use max_completion_tokens instead of max_tokens
     if 'max_tokens' in kwargs and 'max_completion_tokens' in config['supported_parameters']:
         validated_params['max_completion_tokens'] = kwargs['max_tokens']
     elif 'max_tokens' in kwargs:
         validated_params['max_tokens'] = kwargs['max_tokens']
     
-    # Validate other parameters
+    # Validate other parameters against model's supported list
     supported_params = config['supported_parameters']
     for param, value in kwargs.items():
         if param == 'max_tokens' and 'max_completion_tokens' in supported_params:
-            continue  # already mapped
+            continue  # already mapped above
         if param in supported_params:
             validated_params[param] = value
         else:
+            # Warn but don't fail - allows graceful degradation
             print(f"Warning: Parameter '{param}' is not supported for model {model}. Supported: {supported_params}")
     
     return validated_params
 
 def count_tokens(text: str, model: str) -> int:
-    """Count the number of tokens in a text string."""
+    """
+    Count the number of tokens in a text string using the model's tokenizer.
+    
+    Token counting is important for:
+    - Cost estimation (pricing is per token)
+    - Staying within model context limits
+    - Monitoring API usage
+    
+    Uses tiktoken library which provides accurate token counting for OpenAI models.
+    For non-OpenAI models, uses GPT-4 tokenizer as approximation (most models use
+    similar tokenization schemes).
+    
+    Args:
+        text (str): Text to count tokens for
+        model (str): Model name (determines which tokenizer to use)
+        
+    Returns:
+        int: Number of tokens in the text
+    """
     try:
+        # Get the tokenizer name from model config
         config = get_model_config(model)
         tokenizer_name = config['tokenizer']
+        # Create encoding and count tokens
         encoding = tiktoken.encoding_for_model(tokenizer_name)
         return len(encoding.encode(text))
     except Exception as e:
+        # Fallback to GPT-4 tokenizer if model-specific tokenizer fails
         print(f"Warning: Could not get tokenizer for model {model}, using GPT-4 tokenizer as fallback: {e}")
         try:
-            # Fallback to GPT-4 tokenizer
+            # GPT-4 tokenizer is a good approximation for most models
             encoding = tiktoken.encoding_for_model("gpt-4")
             return len(encoding.encode(text))
         except Exception as fallback_error:
+            # Final fallback: rough character-based estimation
             print(f"Error: Could not use GPT-4 tokenizer as fallback: {fallback_error}")
-            # Final fallback: rough estimation (1 token ≈ 4 characters for English text)
+            # Rough estimation: 1 token ≈ 4 characters for English text
+            # This is less accurate but better than failing completely
             estimated_tokens = len(text) // 4
             print(f"Using rough estimation: {estimated_tokens} tokens (based on character count)")
             return estimated_tokens
 
 def calculate_cost(input_tokens: int, output_tokens: int, model: str) -> float:
-    """Calculate the cost of an API call based on token counts."""
-    if model not in MODEL_PRICING:
-        print(f"Warning: No pricing information available for model {model}. Using GPT-4 pricing as fallback.")
-        model = "gpt-4"  # Fallback to GPT-4 pricing
+    """
+    Calculate the estimated cost of an API call based on token counts.
     
+    Pricing is typically different for input and output tokens, with output
+    tokens usually being more expensive. Costs are calculated per 1K tokens.
+    
+    Args:
+        input_tokens (int): Number of input tokens (prompt)
+        output_tokens (int): Number of output tokens (response)
+        model (str): Model name (must be in MODEL_PRICING)
+        
+    Returns:
+        float: Estimated cost in USD
+    """
+    if model not in MODEL_PRICING:
+        # Fallback to GPT-4 pricing if model pricing not available
+        print(f"Warning: No pricing information available for model {model}. Using GPT-4 pricing as fallback.")
+        model = "gpt-4"
+    
+    # Calculate costs separately for input and output
+    # Pricing is per 1K tokens, so divide by 1000
     input_cost = (input_tokens / 1000) * MODEL_PRICING[model]["input"]
     output_cost = (output_tokens / 1000) * MODEL_PRICING[model]["output"]
     return input_cost + output_cost
 
 def send_to_llm(prompt, model, temperature=None, enable_token_counting=True, **kwargs):
     """
-    Send a prompt to LLM API (OpenAI or OpenRouter) and return the response.
+    Main entry point for sending prompts to LLM APIs.
+    
+    This function routes requests to the appropriate API provider (OpenAI or OpenRouter)
+    based on the model. It handles special cases like o3-pro which uses a different API.
     
     Args:
-        prompt (str): The prompt to send
-        model (str): The model to use
-        temperature (float, optional): Temperature for response generation
+        prompt (str): The prompt text to send to the LLM
+        model (str): Model name (e.g., "gpt-4o", "deepseek/deepseek-r1", "o3-pro")
+        temperature (float, optional): Temperature for response generation (0.0-2.0)
+                                       Lower = more deterministic, Higher = more creative
         enable_token_counting (bool): Whether to count tokens and calculate cost
-        **kwargs: Additional model-specific parameters (max_tokens, top_p, etc.)
+                                     Disable for faster execution if cost tracking not needed
+        **kwargs: Additional model-specific parameters:
+            - max_tokens: Maximum tokens in response
+            - top_p: Nucleus sampling parameter
+            - frequency_penalty: Penalize frequent tokens
+            - presence_penalty: Penalize new tokens
     
     Returns:
-        str: The response from the model
+        str: The LLM's response text
+        
+    Note:
+        - OpenAI models: Uses standard OpenAI API
+        - OpenRouter models: Routes through OpenRouter API (supports many providers)
+        - o3-pro: Uses special OpenAI response API (not chat completion)
     """
     # Special handling for o3-pro model (uses response API instead of chat completion)
     if model == "o3-pro":
         return send_to_o3_pro(prompt, model, temperature, enable_token_counting, **kwargs)
     
-    # Route to appropriate provider based on model
+    # Route to appropriate provider based on model configuration
     if is_openai_model(model):
         return send_to_openai(prompt, model, temperature, enable_token_counting, **kwargs)
     else:
@@ -830,9 +920,10 @@ def send_to_openai(prompt, model, temperature=None, enable_token_counting=True, 
     """
     try:
         # Create OpenAI client with timeout settings
+        # Uses OPENAI_API_KEY from environment variable automatically
         client = OpenAI(
-            timeout=30.0,  # 30 second timeout
-            max_retries=2
+            timeout=30.0,  # 30 second timeout to prevent hanging
+            max_retries=2  # Retry up to 2 times on transient failures
         )
     except Exception as e:
         print(f"Error creating OpenAI client: {e}")
@@ -840,6 +931,7 @@ def send_to_openai(prompt, model, temperature=None, enable_token_counting=True, 
         raise
     
     # Validate and normalize parameters for the specific model
+    # This ensures parameters are compatible with the model's capabilities
     try:
         params = {'temperature': temperature} if temperature is not None else {}
         params.update(kwargs)
@@ -848,12 +940,12 @@ def send_to_openai(prompt, model, temperature=None, enable_token_counting=True, 
         print(f"Parameter validation error: {e}")
         raise
     
-    # Initialize token counts
+    # Initialize token counts for cost tracking
     input_tokens = None
     output_tokens = None
     cost = None
     
-    # Count input tokens if enabled
+    # Count input tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
             input_tokens = count_tokens(prompt, model)
@@ -861,17 +953,17 @@ def send_to_openai(prompt, model, temperature=None, enable_token_counting=True, 
             print(f"Warning: Could not count input tokens: {e}")
             input_tokens = None
     
-    # Prepare API call parameters
+    # Prepare API call parameters in OpenAI chat completion format
     api_params = {
         "model": model,
         "messages": [
             {"role": "system", "content": "You are a security assistant."},
             {"role": "user", "content": prompt}
         ],
-        **validated_params
+        **validated_params  # Include validated parameters (temperature, max_tokens, etc.)
     }
     
-    # Make the API call
+    # Make the API call to OpenAI chat completions endpoint
     try:
         response = client.chat.completions.create(**api_params)
     except Exception as e:
@@ -879,7 +971,7 @@ def send_to_openai(prompt, model, temperature=None, enable_token_counting=True, 
         print("This might be due to network issues, API key problems, or rate limiting.")
         raise
     
-    # Count output tokens if enabled
+    # Count output tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
             output_tokens = count_tokens(response.choices[0].message.content, model)
@@ -944,11 +1036,13 @@ def send_to_openrouter(prompt, model, temperature=None, enable_token_counting=Tr
     """
     try:
         # Create OpenRouter client with timeout settings
+        # OpenRouter provides unified API access to multiple LLM providers
+        # Uses OPENROUTER_API_KEY from environment variable
         client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
+            base_url="https://openrouter.ai/api/v1",  # OpenRouter API endpoint
             api_key=os.getenv('OPENROUTER_API_KEY'),
             timeout=30.0,  # 30 second timeout
-            max_retries=2
+            max_retries=2  # Retry up to 2 times on transient failures
         )
     except Exception as e:
         print(f"Error creating OpenRouter client: {e}")
@@ -956,6 +1050,7 @@ def send_to_openrouter(prompt, model, temperature=None, enable_token_counting=Tr
         raise
     
     # Validate and normalize parameters for the specific model
+    # OpenRouter models may have different parameter requirements than OpenAI
     try:
         params = {'temperature': temperature} if temperature is not None else {}
         params.update(kwargs)
@@ -964,12 +1059,12 @@ def send_to_openrouter(prompt, model, temperature=None, enable_token_counting=Tr
         print(f"Parameter validation error: {e}")
         raise
     
-    # Initialize token counts
+    # Initialize token counts for cost tracking
     input_tokens = None
     output_tokens = None
     cost = None
     
-    # Count input tokens if enabled
+    # Count input tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
             input_tokens = count_tokens(prompt, model)
@@ -977,17 +1072,18 @@ def send_to_openrouter(prompt, model, temperature=None, enable_token_counting=Tr
             print(f"Warning: Could not count input tokens: {e}")
             input_tokens = None
     
-    # Prepare API call parameters
+    # Prepare API call parameters in OpenAI-compatible format
+    # OpenRouter uses the same API format as OpenAI for compatibility
     api_params = {
-        "model": model,
+        "model": model,  # Model name includes provider prefix (e.g., "deepseek/deepseek-r1")
         "messages": [
             {"role": "system", "content": "You are a security assistant."},
             {"role": "user", "content": prompt}
         ],
-        **validated_params
+        **validated_params  # Include validated parameters
     }
     
-    # Make the API call
+    # Make the API call to OpenRouter
     try:
         response = client.chat.completions.create(**api_params)
     except Exception as e:
@@ -995,7 +1091,7 @@ def send_to_openrouter(prompt, model, temperature=None, enable_token_counting=Tr
         print("This might be due to network issues, API key problems, or rate limiting.")
         raise
     
-    # Count output tokens if enabled
+    # Count output tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
             output_tokens = count_tokens(response.choices[0].message.content, model)
@@ -1059,9 +1155,10 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
         str: The response from the model
     """
     try:
-        # Create OpenAI client with timeout settings
+        # Create OpenAI client with longer timeout settings
+        # o3-pro uses reasoning which can take longer than standard chat completions
         client = OpenAI(
-            timeout=60.0,  # Longer timeout for o3-pro as it may take more time
+            timeout=60.0,  # Longer timeout (60s) for o3-pro as reasoning takes more time
             max_retries=2
         )
     except Exception as e:
@@ -1069,7 +1166,8 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
         print("This might be due to network/SSL issues. Please check your internet connection.")
         raise
     
-    # Validate and normalize parameters for the specific model
+    # Validate and normalize parameters for o3-pro
+    # Note: o3-pro doesn't support temperature parameter
     try:
         params = {'temperature': temperature} if temperature is not None else {}
         params.update(kwargs)
@@ -1078,12 +1176,12 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
         print(f"Parameter validation error: {e}")
         raise
     
-    # Initialize token counts
+    # Initialize token counts for cost tracking
     input_tokens = None
     output_tokens = None
     cost = None
     
-    # Count input tokens if enabled
+    # Count input tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
             input_tokens = count_tokens(prompt, model)
@@ -1092,17 +1190,19 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
             input_tokens = None
     
     # Prepare API call parameters for o3-pro response API
+    # o3-pro uses a different API endpoint (responses.create) than standard chat completions
     api_params = {
         "model": model,
-        "input": [
+        "input": [  # Uses "input" instead of "messages" for response API
             {"role": "system", "content": "You are a security assistant specialized in vulnerability analysis."},
             {"role": "user", "content": prompt}
         ],
-        "reasoning": {"effort": "high"},  # Enable high reasoning for best performance
+        "reasoning": {"effort": "high"},  # Enable high reasoning effort for best performance
         **validated_params
     }
     
-    # Make the API call using responses API (no chat completion fallback)
+    # Make the API call using responses API (not chat completion)
+    # This is a special API endpoint for reasoning models like o3-pro
     try:
         response = client.responses.create(**api_params)
     except Exception as e:
@@ -1110,9 +1210,10 @@ def send_to_o3_pro(prompt, model, temperature=None, enable_token_counting=True, 
         print("This might be due to network issues, API key problems, or rate limiting.")
         raise
     
-    # Count output tokens if enabled
+    # Count output tokens if enabled (for cost estimation)
     if enable_token_counting:
         try:
+            # o3-pro response API returns output_text instead of choices[0].message.content
             output_tokens = count_tokens(response.output_text, model)
         except Exception as e:
             print(f"Warning: Could not count output tokens: {e}")
@@ -1244,12 +1345,16 @@ def test_openrouter_connectivity():
 
 def validate_api_key():
     """
-    Validate that the required API key is set.
+    Validate that required API keys are set in environment variables.
+    
+    This function checks for both OpenAI and OpenRouter API keys since the system
+    supports models from both providers. OpenAI key is required for OpenAI models,
+    OpenRouter key is required for models accessed through OpenRouter.
     
     Returns:
-        bool: True if API key is set, False otherwise
+        bool: True if all required API keys are set, False otherwise
     """
-    # Check for OpenAI API key
+    # Check for OpenAI API key (required for OpenAI models)
     if not os.getenv('OPENAI_API_KEY'):
         print("Error: OPENAI_API_KEY environment variable is not set.")
         print("Please set your OpenAI API key:")
@@ -1257,6 +1362,7 @@ def validate_api_key():
         return False
     
     # Check for OpenRouter API key (required for non-OpenAI models)
+    # OpenRouter provides access to models from multiple providers (DeepSeek, Gemini, etc.)
     if not os.getenv('OPENROUTER_API_KEY'):
         print("Warning: OPENROUTER_API_KEY environment variable is not set.")
         print("This is required for non-OpenAI models (DeepSeek, Google Gemini, etc.).")
