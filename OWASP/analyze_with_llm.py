@@ -395,29 +395,45 @@ def extract_vulnerability_location(json_obj, base_path):
     
     loc = json_obj["locations"][0]
     
+    # Initialize variables before try block to avoid UnboundLocalError
+    # These will be set in the try block, but need defaults in case of early exceptions
+    line_number = loc.get("startLine", 0)
+    vulnerable_line = "Unable to read file"
+    
     # Read the file to get the exact line containing the vulnerability
     try:
-        full_path = os.path.join(base_path, loc["file"])
-        with open(full_path, "r") as f:
+        file_path = loc.get("file", "")
+        if not file_path:
+            raise ValueError("File path is missing in location data")
+            
+        full_path = os.path.join(base_path, file_path)
+        with open(full_path, "r", encoding="utf-8") as f:
             lines = f.readlines()
         
         # Get the vulnerable line (convert from 1-indexed to 0-indexed)
-        line_number = loc["startLine"]
-        if line_number <= len(lines):
+        line_number = loc.get("startLine", 0)
+        if line_number > 0 and line_number <= len(lines):
             vulnerable_line = lines[line_number - 1].rstrip('\n')
         else:
             vulnerable_line = "Line not found in file"
             
     except Exception as e:
         vulnerable_line = f"Error reading file: {e}"
+        # Ensure line_number is set even if exception occurs early
+        if line_number == 0:
+            line_number = loc.get("startLine", 0)
+    
+    # Ensure vulnerable_line is a string for safe string operations
+    if not isinstance(vulnerable_line, str):
+        vulnerable_line = str(vulnerable_line)
     
     # Highlight the specific vulnerable part if column information is available
     # This helps LLM focus on the exact problematic code segment
     if loc.get("startColumn") and loc.get("endColumn"):
-        start_col = loc["startColumn"] - 1  # Convert to 0-indexed
-        end_col = loc["endColumn"] - 1      # Convert to 0-indexed
+        start_col = loc.get("startColumn", 1) - 1  # Convert to 0-indexed
+        end_col = loc.get("endColumn", 1) - 1      # Convert to 0-indexed
         
-        if start_col < len(vulnerable_line) and end_col <= len(vulnerable_line):
+        if start_col >= 0 and end_col > start_col and start_col < len(vulnerable_line) and end_col <= len(vulnerable_line):
             # Wrap vulnerable part in [[[...]]] markers for visibility
             highlighted_line = (
                 vulnerable_line[:start_col] +
@@ -430,8 +446,16 @@ def extract_vulnerability_location(json_obj, base_path):
         highlighted_line = vulnerable_line
     
     # Create plain English explanation for the LLM
-    vulnerable_part = vulnerable_line[loc.get("startColumn", 1) - 1:loc.get("endColumn", len(vulnerable_line))]
-    explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by CodeQL as the vulnerability location'
+    if line_number > 0 and isinstance(vulnerable_line, str) and len(vulnerable_line) > 0:
+        start_col_idx = max(0, loc.get("startColumn", 1) - 1)
+        end_col_idx = min(len(vulnerable_line), loc.get("endColumn", len(vulnerable_line)))
+        if start_col_idx < end_col_idx:
+            vulnerable_part = vulnerable_line[start_col_idx:end_col_idx]
+        else:
+            vulnerable_part = vulnerable_line
+        explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by CodeQL as the vulnerability location'
+    else:
+        explanation = f'The following location (line {line_number}) has been detected by CodeQL as the vulnerability location'
     
     return f"{explanation}:\n\n{highlighted_line}"
 
