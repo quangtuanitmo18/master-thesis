@@ -453,7 +453,7 @@ def extract_vulnerability_location(json_obj, base_path):
             vulnerable_part = vulnerable_line[start_col_idx:end_col_idx]
         else:
             vulnerable_part = vulnerable_line
-        explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by CodeQL as the vulnerability location'
+    explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by CodeQL as the vulnerability location'
     else:
         explanation = f'The following location (line {line_number}) has been detected by CodeQL as the vulnerability location'
     
@@ -565,7 +565,7 @@ def create_run_directories(prompt_version: str, dataset: str, cwe_id: str, model
         cwe_id: CWE identifier (e.g., CWE-089)
         model: LLM model name
         base_dir: Base directory for results (default: "results")
-        
+    
     Returns:
         tuple: (run_dir, prompts_dir, responses_dir, jsonl_file_path)
     """

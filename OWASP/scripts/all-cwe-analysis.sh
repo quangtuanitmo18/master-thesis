@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Configuration - Update these paths according to your setup
+DB_PATH="${CODEQL_DB_PATH:-/home/user/codeql-db/owasp-benchmark}"
+
 # Base directory of all CWE folders (CodeQL queries)
 CWE_DIR="${CODEQL_CWE_DIR:-../codeql/qlpacks/codeql/java-queries/1.4.0/Security/CWE}"
 # CodeQL executable path
@@ -36,7 +38,7 @@ for cwe_path in "$CWE_DIR"/*; do
     cwe_name=$(basename "$cwe_path")
     echo "Analyzing $cwe_name..."
 
-    $CODEQL_PATH database analyze codeql-dbs/owasp-benchmark "$cwe_path" \
+    $CODEQL_PATH database analyze "$DB_PATH" "$cwe_path" \
       --format=sarif-latest \
       --output="$OUTPUT_DIR/owasp-benchmark/owasp-benchmark-$cwe_name.sarif" \
       --verbosity=progress
