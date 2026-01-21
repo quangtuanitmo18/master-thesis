@@ -461,3 +461,6 @@ docker-compose.yaml
 !**/config.ini.example
 !**/*.template
 !**/*.example
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc

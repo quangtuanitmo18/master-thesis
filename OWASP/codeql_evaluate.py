@@ -2,8 +2,8 @@ import csv
 import json
 import os
 
-CSV_PATH = "/home/user/Desktop/Projects/tuandev/thesis/master-thesis/OWASP/input_files/ground_truth/expectedresults-1.2.csv"
-SARIF_PATH = "/home/user/Desktop/Projects/tuandev/thesis/master-thesis/OWASP/input_files/sarif_results/owasp-benchmark/codeql-owasp-benchmark-CWE-643.sarif"
+CSV_PATH = "input_files/ground_truth/expectedresults-1.2.csv"
+SARIF_PATH = "input_files/sarif_results/owasp-benchmark/codeql-owasp-benchmark-java-security-extended-1.4.0.sarif"
 
 # Config for CWE-22 (Path Traversal) analysis
 TARGET_CWE = "643"
