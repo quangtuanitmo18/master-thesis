@@ -453,11 +453,13 @@ def extract_vulnerability_location(json_obj, base_path):
             vulnerable_part = vulnerable_line[start_col_idx:end_col_idx]
         else:
             vulnerable_part = vulnerable_line
-    explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by the static analyzer as the vulnerability location'
-    else:
-        explanation = f'The following location (line {line_number}) has been detected by the static analyzer as the vulnerability location'
-    
-    return f"{explanation}:\n\n{highlighted_line}"
+
+            if start_col_idx < end_col_idx:
+                explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by the static analyzer as the vulnerability location'
+            else:
+                explanation = f'The following location (line {line_number}) has been detected by the static analyzer as the vulnerability location'
+
+            return f"{explanation}:\n\n{highlighted_line}"
 
 # Create full prompt from a JSON record
 def create_prompt_from_warning(json_obj, prompt_template, base_path):
