@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 
-import os
-import pandas as pd
-from collections import defaultdict
 import json
+import os
+from collections import defaultdict
+
 import matplotlib
+import pandas as pd
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import seaborn as sns
 import numpy as np
+import seaborn as sns
+
 
 def extract_run_info_from_folder(folder_path: str):
     """
@@ -39,9 +42,17 @@ def extract_run_info_from_folder(folder_path: str):
     if not cwe_part:
         raise ValueError(f"No CWE found in folder name: {folder_name}")
     
+    # Normalize CWE ID: remove leading zeros (e.g., "CWE-090" -> "CWE-90")
+    cwe_number_str = cwe_part.replace("CWE-", "")
+    if cwe_number_str.isdigit():
+        cwe_number = str(int(cwe_number_str))  # Remove leading zeros
+        cwe = f"CWE-{cwe_number}"
+    else:
+        cwe = cwe_part
+    
     model = "_".join(model_parts)
     
-    return prompt_version, dataset, cwe_part, model
+    return prompt_version, dataset, cwe, model
 
 def find_evaluation_csv(run_folder: str):
     for filename in os.listdir(run_folder):

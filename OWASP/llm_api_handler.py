@@ -1414,10 +1414,10 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
         # Put stream last to ensure it's always False, even if validated_params has stream
     }
     
-    # Retry logic with exponential backoff for rate limit errors
+    # Retry logic with exponential backoff for rate limit errors (429) and server errors (500)
     max_retries = 5
-    base_delay = 2  # Base delay in seconds
-    max_delay = 60  # Maximum delay in seconds
+    base_delay = 5  # Base delay in seconds (increased from 2)
+    max_delay = 120  # Maximum delay in seconds (increased from 60)
     response = None
     
     for attempt in range(max_retries):
@@ -1429,14 +1429,18 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
             break
             
         except Exception as e:
-            # Check if it's a rate limit error (429)
+            # Check if it's a rate limit error (429) or server error (500)
             is_rate_limit = False
+            is_server_error = False
             retry_after = None
             error_detail = None
+            status_code = None
             
             # Try to extract error details
             if hasattr(e, 'response'):
                 try:
+                    if hasattr(e.response, 'status_code'):
+                        status_code = e.response.status_code
                     if hasattr(e.response, 'json'):
                         error_detail = e.response.json()
                     elif hasattr(e.response, 'text'):
@@ -1449,15 +1453,23 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
                 except:
                     pass
             
-            # Check error message/code for rate limit
+            # Check error message/code for rate limit or server errors
             error_msg = str(e)
             if '429' in error_msg or 'rate limit' in error_msg.lower() or 'RATE_LIMIT' in error_msg:
                 is_rate_limit = True
+            elif '500' in error_msg or 'internal_server_error' in error_msg.lower() or 'server_error' in error_msg.lower():
+                is_server_error = True
+            elif status_code:
+                if status_code == 429:
+                    is_rate_limit = True
+                elif status_code == 500 or status_code >= 502:  # 500, 502, 503, 504
+                    is_server_error = True
             elif error_detail:
-                # Check error_detail dict for rate limit indicators
+                # Check error_detail dict for error indicators
                 if isinstance(error_detail, dict):
                     error_obj = error_detail.get('error', {})
-                    if error_obj.get('code') == 429 or 'RATE_LIMIT' in str(error_obj) or 'RESOURCE_EXHAUSTED' in str(error_obj):
+                    error_code = error_obj.get('code')
+                    if error_code == 429 or 'RATE_LIMIT' in str(error_obj) or 'RESOURCE_EXHAUSTED' in str(error_obj):
                         is_rate_limit = True
                         # Try to extract retry-after time from message
                         message = error_obj.get('message', '')
@@ -1466,25 +1478,30 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
                             match = re.search(r'reset after (\d+)s?', message.lower())
                             if match:
                                 retry_after = int(match.group(1))
+                    elif error_code == 500 or 'internal_server_error' in str(error_obj).lower() or 'server_error' in str(error_obj).lower():
+                        is_server_error = True
                 elif isinstance(error_detail, str):
                     if '429' in error_detail or 'rate limit' in error_detail.lower():
                         is_rate_limit = True
+                    elif '500' in error_detail or 'internal_server_error' in error_detail.lower():
+                        is_server_error = True
             
-            # If rate limit error and not last attempt, retry with backoff
-            if is_rate_limit and attempt < max_retries - 1:
+            # If retryable error (rate limit or server error) and not last attempt, retry with backoff
+            if (is_rate_limit or is_server_error) and attempt < max_retries - 1:
                 # Calculate delay: use retry_after if available, otherwise exponential backoff
                 if retry_after:
                     delay = min(retry_after + 1, max_delay)  # Add 1 second buffer
                 else:
                     delay = min(base_delay * (2 ** attempt), max_delay)  # Exponential backoff
                 
-                print(f"⚠️ Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {delay}s before retry...")
+                error_type = "Rate limit" if is_rate_limit else "Server error"
+                print(f"⚠️ {error_type} hit (attempt {attempt + 1}/{max_retries}). Waiting {delay}s before retry...")
                 if retry_after:
                     print(f"   Server indicates quota resets after {retry_after}s")
                 time.sleep(delay)
                 continue
             else:
-                # Not a rate limit error, or last attempt - raise the error
+                # Not a retryable error, or last attempt - raise the error
                 # Better error handling to show full error details
                 error_msg = str(e)
                 if error_detail:

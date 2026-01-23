@@ -253,8 +253,7 @@ $RECYCLE.BIN/
 # =============================================================================
 
 # OWASP Results and Generated Data
-OWASP/results/*
-!OWASP/results/.gitkeep
+
 OWASP/dashboard-data/*
 !OWASP/dashboard-data/.gitkeep
 OWASP/dashboard-data_backup/*
@@ -424,7 +423,6 @@ docker-compose.yaml
 
 # Ignore specific large directories that are generated
 # Uncomment these if you want to ignore the entire directories
-# OWASP/results/
 # OWASP/dashboard-data/
 # OWASP/dashboard-data_backup/
 # OpenVuln/results/

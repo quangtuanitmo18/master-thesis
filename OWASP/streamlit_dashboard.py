@@ -4,18 +4,19 @@ OWASP Experiment Analysis Dashboard
 Interactive web-based visualization for experiment results
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-import plotly.figure_factory as ff
+import glob
 import json
 import os
-import glob
 from pathlib import Path
-import seaborn as sns
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import plotly.express as px
+import plotly.figure_factory as ff
+import plotly.graph_objects as go
+import seaborn as sns
+import streamlit as st
 
 # Page configuration
 st.set_page_config(
@@ -66,7 +67,13 @@ def load_experiment_data():
                         break
                 
                 if cwe_part:
-                    cwe = cwe_part
+                    # Normalize CWE ID: remove leading zeros (e.g., "CWE-090" -> "CWE-90")
+                    cwe_number_str = cwe_part.replace("CWE-", "")
+                    if cwe_number_str.isdigit():
+                        cwe_number = str(int(cwe_number_str))  # Remove leading zeros
+                        cwe = f"CWE-{cwe_number}"
+                    else:
+                        cwe = cwe_part
                     model = '_'.join(model_parts) if model_parts else "unknown"
                     run_id = "default"  # Default run_id since it's not in directory name
                 else:
@@ -93,7 +100,13 @@ def load_experiment_data():
                     prompt_version = "baseline"  # Default for old format
                     dataset = "owasp"  # Default for old format
                     run_id = '_'.join(run_id_parts)
-                    cwe = cwe_part
+                    # Normalize CWE ID: remove leading zeros (e.g., "CWE-090" -> "CWE-90")
+                    cwe_number_str = cwe_part.replace("CWE-", "")
+                    if cwe_number_str.isdigit():
+                        cwe_number = str(int(cwe_number_str))  # Remove leading zeros
+                        cwe = f"CWE-{cwe_number}"
+                    else:
+                        cwe = cwe_part
                     model = '_'.join(model_parts) if model_parts else "unknown"
                 else:
                     # Fallback to simple parsing if no CWE pattern found
@@ -145,15 +158,20 @@ def load_experiment_data():
         
         # Count confusion matrix elements
         for _, row in group.iterrows():
-            is_vulnerable = row.get('ground_truth_is_vulnerable', False)
+            # Parse ground truth: handle both boolean and string values
+            gt_vuln = row.get('ground_truth_is_vulnerable', False)
+            if isinstance(gt_vuln, str):
+                is_vulnerable = gt_vuln.strip().lower() in ['true', 'yes', '1']
+            else:
+                is_vulnerable = bool(gt_vuln)
             
             # Determine LLM prediction based on available columns
             llm_prediction = None
             
             if 'llm_Attack Feasible?' in row and pd.notna(row['llm_Attack Feasible?']):
-                llm_prediction = row['llm_Attack Feasible?'] == 'Yes'
+                llm_prediction = str(row['llm_Attack Feasible?']).strip().lower() == 'yes'
             elif 'llm_False Positive' in row and pd.notna(row['llm_False Positive']):
-                llm_prediction = row['llm_False Positive'] == 'No'  # Not a false positive = vulnerable
+                llm_prediction = str(row['llm_False Positive']).strip().lower() == 'no'  # Not a false positive = vulnerable
             else:
                 continue  # Skip if we can't determine prediction
             
@@ -199,10 +217,23 @@ def load_experiment_data():
         result_df.attrs['tn_col'] = 'true_negatives'
         result_df.attrs['fn_col'] = 'false_negatives'
         
+        # Sort by CWE for consistent display (handle both 2-digit and 3-digit CWEs)
+        def cwe_sort_key(cwe_str):
+            """Extract numeric part for sorting"""
+            if isinstance(cwe_str, str) and 'CWE-' in cwe_str:
+                try:
+                    return int(cwe_str.replace('CWE-', ''))
+                except:
+                    return 9999
+            return 9999
+        
+        result_df['_cwe_sort'] = result_df['cwe'].apply(cwe_sort_key)
+        result_df = result_df.sort_values('_cwe_sort').drop('_cwe_sort', axis=1)
+        
         # Debug: Show aggregation results
         st.write(f"✅ Aggregated {len(aggregated_data)} experiments")
         st.write("Sample aggregated data:")
-        st.write(result_df.head())
+        st.write(result_df)
         
         return result_df
     else:

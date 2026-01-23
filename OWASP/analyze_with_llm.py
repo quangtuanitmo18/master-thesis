@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -33,6 +34,22 @@ def extract_location_info(location_obj):
         "endColumn": region.get("endColumn")
     }
 
+def extract_test_case_name(file_path: str) -> str:
+    """
+    Extract test case name (e.g., BenchmarkTest00001) from file path.
+    
+    Args:
+        file_path: Path to the source file (e.g., src/main/java/.../BenchmarkTest00001.java)
+        
+    Returns:
+        str: Test case name (e.g., BenchmarkTest00001) or None if not found
+    """
+    filename = os.path.basename(file_path)
+    match = re.search(r"(BenchmarkTest\d+)", filename)
+    if match:
+        return match.group(1)
+    return None
+
 def parse_sarif_to_jsonl(sarif_path, output_jsonl_path):
     """
     Parse SARIF (Static Analysis Results Interchange Format) file to JSONL format.
@@ -41,16 +58,18 @@ def parse_sarif_to_jsonl(sarif_path, output_jsonl_path):
     1. Reads the SARIF JSON file
     2. Extracts vulnerability findings (results) from the first run
     3. Parses locations, related locations, and code flows
-    4. Converts to JSONL (one JSON object per line) for easier processing
+    4. Groups findings by test case (one entry per test case with all findings)
+    5. Converts to JSONL (one JSON object per line) for easier processing
     
     Args:
         sarif_path: Path to input SARIF JSON file
-        output_jsonl_path: Path to output JSONL file (one result per line)
+        output_jsonl_path: Path to output JSONL file (one test case per line with all findings)
     """
     with open(sarif_path, "r", encoding="utf-8") as f:
         sarif_data = json.load(f)
 
-    parsed_results = []
+    # Group findings by test case
+    test_case_findings = {}  # test_case_name -> list of findings
 
     # Process each vulnerability finding in the SARIF results
     for result in sarif_data["runs"][0]["results"]:
@@ -96,12 +115,22 @@ def parse_sarif_to_jsonl(sarif_path, output_jsonl_path):
                                 loc_entry.update(properties)
                         entry["codeFlow"].append(loc_entry)
 
-        parsed_results.append(entry)
+        # Group by test case
+        if entry["locations"]:
+            test_case_name = extract_test_case_name(entry["locations"][0]["file"])
+            if test_case_name:
+                if test_case_name not in test_case_findings:
+                    test_case_findings[test_case_name] = []
+                test_case_findings[test_case_name].append(entry)
 
-    # Write results to JSONL format (one JSON object per line)
+    # Write results to JSONL format (one test case per line with all findings)
     with open(output_jsonl_path, "w", encoding="utf-8") as out_file:
-        for result in parsed_results:
-            out_file.write(json.dumps(result, ensure_ascii=False) + "\n")
+        for test_case_name, findings in sorted(test_case_findings.items()):
+            test_case_entry = {
+                "testCaseName": test_case_name,
+                "findings": findings
+            }
+            out_file.write(json.dumps(test_case_entry, ensure_ascii=False) + "\n")
 
 def extract_imports(lines: List[str]) -> str:
     """
@@ -453,47 +482,40 @@ def extract_vulnerability_location(json_obj, base_path):
             vulnerable_part = vulnerable_line[start_col_idx:end_col_idx]
         else:
             vulnerable_part = vulnerable_line
-    explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by the static analyzer as the vulnerability location'
+    if line_number > 0 and isinstance(vulnerable_line, str) and len(vulnerable_line) > 0:
+        explanation = f'"{vulnerable_part}" in the following line of code (line {line_number}) has been detected by the static analyzer as the vulnerability location'
     else:
         explanation = f'The following location (line {line_number}) has been detected by the static analyzer as the vulnerability location'
-    
+
     return f"{explanation}:\n\n{highlighted_line}"
 
 # Create full prompt from a JSON record
-def create_prompt_from_warning(json_obj, prompt_template, base_path):
+def create_prompt_from_single_finding(finding, base_path):
     """
-    Create a complete prompt from a vulnerability warning JSON object.
-    
-    This is the core function that assembles all components needed for LLM analysis:
-    1. Rule ID and message from static analysis tool
-    2. Main code snippet with surrounding context (function/class)
-    3. Specific vulnerability location with highlighting
-    4. Dataflow analysis showing source-to-sink path
-    
-    The prompt template contains placeholders that are filled with this information.
+    Create prompt section for a single finding.
     
     Args:
-        json_obj: The warning JSON object from parsed SARIF/JSONL
-        prompt_template: Template string with placeholders ({rule_id}, {message}, etc.)
+        finding: A single finding JSON object
         base_path: Base path for resolving file paths
         
     Returns:
-        str: Complete formatted prompt ready to send to LLM
+        dict: Dictionary with finding details (rule_id, message, snippet, location, dataflow)
     """
-    rule_id = json_obj.get("ruleId", "unknown")
+    rule_id = finding.get("ruleId", "unknown")
     
     # Handle message field which can be either a string or a dictionary
-    # SARIF format allows both representations
-    message_obj = json_obj.get("message", {})
+    message_obj = finding.get("message", {})
     if isinstance(message_obj, dict):
         message = message_obj.get("text", "No message")
     else:
         message = str(message_obj) if message_obj else "No message"
     
-    loc = json_obj["locations"][0]
+    if not finding.get("locations"):
+        return None
+    
+    loc = finding["locations"][0]
     
     # Extract the whole code snippet containing the vulnerability
-    # Uses "whole_block" mode to get function/class context for better understanding
     main_snippet = extract_code_snippet(
         file_path=loc["file"],
         start_line=loc["startLine"],
@@ -506,40 +528,112 @@ def create_prompt_from_warning(json_obj, prompt_template, base_path):
     )
     
     # Extract the specific vulnerability location with highlighting
-    vulnerability_location = extract_vulnerability_location(json_obj, base_path)
+    vulnerability_location = extract_vulnerability_location(finding, base_path)
     
     # Build dataflow section from the parsed JSONL data
-    # Shows how tainted data flows from source to sink
-    dataflow_section = build_dataflow_section(json_obj.get("codeFlow", []), base_path)
+    dataflow_section = build_dataflow_section(finding.get("codeFlow", []), base_path)
     
-    # Fill the template with all extracted information
-    return prompt_template.format(
-        rule_id=rule_id,
-        message=message,
-        main_snippet=main_snippet,
-        vulnerability_location=vulnerability_location,
-        dataflow_section=dataflow_section
+    return {
+        "rule_id": rule_id,
+        "message": message,
+        "main_snippet": main_snippet,
+        "vulnerability_location": vulnerability_location,
+        "dataflow_section": dataflow_section
+    }
+
+def create_prompt_from_test_case(test_case_entry, prompt_template, base_path):
+    """
+    Create a complete prompt from a test case entry containing multiple findings.
+    
+    This function assembles all findings for a test case into a single prompt:
+    1. Multiple findings with their rule IDs and messages
+    2. Code snippets for each finding
+    3. Vulnerability locations for each finding
+    4. Dataflow analysis for each finding
+    
+    Args:
+        test_case_entry: JSON object with testCaseName and findings list
+        prompt_template: Template string with placeholders
+        base_path: Base path for resolving file paths
+        
+    Returns:
+        str: Complete formatted prompt ready to send to LLM
+    """
+    test_case_name = test_case_entry.get("testCaseName", "unknown")
+    findings = test_case_entry.get("findings", [])
+    
+    if not findings:
+        return None
+    
+    # Process all findings for this test case
+    finding_sections = []
+    for idx, finding in enumerate(findings, 1):
+        finding_data = create_prompt_from_single_finding(finding, base_path)
+        if finding_data:
+            finding_sections.append(finding_data)
+    
+    if not finding_sections:
+        return None
+    
+    # If only one finding, use the original template format
+    if len(finding_sections) == 1:
+        fd = finding_sections[0]
+        return prompt_template.format(
+            rule_id=fd["rule_id"],
+            message=fd["message"],
+            main_snippet=fd["main_snippet"],
+            vulnerability_location=fd["vulnerability_location"],
+            dataflow_section=fd["dataflow_section"]
+        )
+    
+    # Multiple findings: combine them into one prompt
+    # Build sections for each finding
+    findings_text = ""
+    for idx, fd in enumerate(finding_sections, 1):
+        findings_text += f"\n\n=== Finding {idx} of {len(finding_sections)} ===\n"
+        findings_text += f"Rule ID: {fd['rule_id']}\n"
+        findings_text += f"Message: {fd['message']}\n\n"
+        findings_text += f"Vulnerability Location:\n{fd['vulnerability_location']}\n\n"
+        findings_text += f"Code Snippet:\n{fd['main_snippet']}\n\n"
+        if fd['dataflow_section']:
+            findings_text += f"Dataflow Analysis:\n{fd['dataflow_section']}\n"
+    
+    # Use template but replace placeholders with combined findings
+    # For multiple findings, we'll use a modified template
+    combined_prompt = prompt_template.format(
+        rule_id=finding_sections[0]["rule_id"],  # Use first finding's rule_id as primary
+        message=f"Multiple findings detected in {test_case_name}. See details below.",
+        main_snippet=findings_text,
+        vulnerability_location=f"Multiple vulnerability locations detected in {test_case_name}. See details in findings below.",
+        dataflow_section="\n".join([fd["dataflow_section"] for fd in finding_sections if fd["dataflow_section"]])
     )
+    
+    return combined_prompt
 
 def extract_cwe_id(sarif_file_path: str) -> str:
     """
     Extract CWE (Common Weakness Enumeration) ID from SARIF file path.
     
-    CWE IDs identify vulnerability types (e.g., CWE-089 for SQL Injection).
-    The filename convention is: "owasp-benchmark-CWE-089.sarif"
+    CWE IDs identify vulnerability types (e.g., CWE-89 for SQL Injection, CWE-90 for LDAP Injection).
+    The filename convention may be: "owasp-benchmark-CWE-089.sarif" or "owasp-benchmark-CWE-90.sarif"
+    
+    This function normalizes CWE IDs by removing leading zeros (e.g., "CWE-090" -> "CWE-90").
     
     Args:
         sarif_file_path: Path to the SARIF file
         
     Returns:
-        str: CWE ID in format "CWE-XXX" or "UNKNOWN" if not found
+        str: CWE ID in format "CWE-XXX" (without leading zeros) or "UNKNOWN" if not found
     """
     filename = os.path.basename(sarif_file_path)
-    # Extract CWE number from filename like "owasp-benchmark-CWE-089.sarif"
+    # Extract CWE number from filename like "owasp-benchmark-CWE-089.sarif" or "CWE-90.sarif"
     if "CWE-" in filename:
         cwe_part = filename.split("CWE-")[1]
-        cwe_id = cwe_part.split(".")[0]
-        return f"CWE-{cwe_id}"
+        cwe_number_str = cwe_part.split(".")[0]
+        # Remove leading zeros (e.g., "090" -> "90", "089" -> "89")
+        # But keep at least one digit (e.g., "0" stays "0")
+        cwe_number = str(int(cwe_number_str)) if cwe_number_str.isdigit() else cwe_number_str
+        return f"CWE-{cwe_number}"
     return "UNKNOWN"
 
 def create_run_directories(prompt_version: str, dataset: str, cwe_id: str, model: str, base_dir: str = "results") -> tuple:
@@ -628,29 +722,46 @@ def process_batch(batch: List[Tuple[str, str, str, str]], model: str, temperatur
         Process a single prompt: save it, send to LLM, save response.
         
         This inner function is called for each prompt in the batch.
+        Includes retry logic for transient failures.
         Errors are caught and logged without stopping the entire batch.
         """
-        try:
-            # Save prompt to file for debugging and reproducibility
-            with open(prompt_path, 'w', encoding='utf-8') as pf:
-                pf.write(prompt)
-            
-            # Send prompt to LLM API and get response
-            # max_tokens=4096 allows for detailed analysis responses
-            response = send_to_llm(prompt, model, temperature, enable_token_counting, max_tokens=4096)
-            
-            # Save LLM response to file for later evaluation
-            response_path = os.path.join(responses_dir, f"{filename_stub}.txt")
-            with open(response_path, 'w', encoding='utf-8') as rf:
-                rf.write(response)
-            
-            results[idx] = True
-            print(f"✅ Processed {filename_stub} (Rule: {rule_id})")
-            
-        except Exception as e:
-            # Log error but continue processing other prompts in batch
-            print(f"❌ Error processing {filename_stub}: {e}")
-            results[idx] = False
+        max_retries = 7  # Retry up to 7 times for transient failures (increased from 3)
+        base_delay = 5  # Base delay in seconds for exponential backoff (increased from 2)
+        max_delay = 120  # Maximum delay in seconds (cap exponential backoff)
+        
+        for attempt in range(max_retries):
+            try:
+                # Save prompt to file for debugging and reproducibility
+                with open(prompt_path, 'w', encoding='utf-8') as pf:
+                    pf.write(prompt)
+                
+                # Send prompt to LLM API and get response
+                # max_tokens=4096 allows for detailed analysis responses
+                response = send_to_llm(prompt, model, temperature, enable_token_counting, max_tokens=4096)
+                
+                # Save LLM response to file for later evaluation
+                response_path = os.path.join(responses_dir, f"{filename_stub}.txt")
+                with open(response_path, 'w', encoding='utf-8') as rf:
+                    rf.write(response)
+                
+                results[idx] = True
+                if attempt > 0:
+                    print(f"✅ Processed {filename_stub} (Rule: {rule_id}) [Retry {attempt} succeeded]")
+                else:
+                    print(f"✅ Processed {filename_stub} (Rule: {rule_id})")
+                return  # Success - exit retry loop
+                
+            except Exception as e:
+                # If this is the last attempt, log error and mark as failed
+                if attempt == max_retries - 1:
+                    print(f"❌ Error processing {filename_stub} after {max_retries} attempts: {e}")
+                    results[idx] = False
+                else:
+                    # Calculate exponential backoff delay with cap
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    print(f"⚠️ Error processing {filename_stub} (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"   Retrying in {delay}s...")
+                    time.sleep(delay)
     
     # Process all prompts in the batch concurrently using thread pool
     # Each prompt gets its own thread for parallel API calls
@@ -751,21 +862,21 @@ def main():
     all_prompts = []
     skipped_count = 0
     
-    print("Collecting prompts from JSONL file...")
+    print("Collecting prompts from JSONL file (grouped by test case)...")
     with open(jsonl_file_path, "r", encoding="utf-8") as f:
         for idx, line in enumerate(f):
             try:
-                warning = json.loads(line)
-                rule_id = warning["ruleId"].replace("/", "_")  # Sanitize rule ID for filename
+                test_case_entry = json.loads(line)
+                test_case_name = test_case_entry.get("testCaseName", "unknown")
+                findings = test_case_entry.get("findings", [])
                 
-                # Get the main source file from the first location
-                source_file = warning["locations"][0]["file"]
-                source_filename = os.path.basename(source_file).replace(".", "_")  # safe for filenames
-
-                # Create unique filename for this finding
-                # Format: {source_file}_{rule_id}_{index}_{model}
+                if not findings:
+                    continue
+                
+                # Create unique filename for this test case
+                # Format: {test_case_name}_{model}
                 safe_model_name = args.model.replace("/", "_")
-                filename_stub = f"{source_filename}_{rule_id}_{idx}_{safe_model_name}"
+                filename_stub = f"{test_case_name}_{safe_model_name}"
 
                 # Skip if response already exists (allows resuming interrupted runs)
                 if os.path.exists(os.path.join(responses_dir, filename_stub + ".txt")):
@@ -773,9 +884,19 @@ def main():
                     skipped_count += 1
                     continue
                 
-                # Generate prompt with whole code snippet and parsed dataflow
-                prompt = create_prompt_from_warning(warning, template, base_path=CODEBASE_PATH)
+                # Generate prompt with all findings for this test case
+                prompt = create_prompt_from_test_case(test_case_entry, template, base_path=CODEBASE_PATH)
+                
+                if not prompt:
+                    print(f"⚠️ Warning: Could not create prompt for {test_case_name}")
+                    continue
+                
                 prompt_path = os.path.join(prompts_dir, filename_stub + ".txt")
+                
+                # Use first finding's rule_id for reference
+                rule_id = findings[0].get("ruleId", "unknown").replace("/", "_")
+                if len(findings) > 1:
+                    rule_id = f"{rule_id}_and_{len(findings)-1}_more"
                 
                 all_prompts.append((filename_stub, prompt, prompt_path, rule_id))
 
