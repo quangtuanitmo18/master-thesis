@@ -1,0 +1,8 @@
+```json
+{
+  "False Positive": "No",
+  "Sanitization Found?": "Yes",
+  "Attack Feasible?": "No",
+  "Confidence": "High"
+}
+```

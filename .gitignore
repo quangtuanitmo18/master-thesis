@@ -321,12 +321,12 @@ backup/
 *_results.txt
 
 # Parsed results from model analysis
-parsed_results.jsonl
-*_parsed_results.jsonl
+# parsed_results.jsonl  # Commented out to allow committing parsed results
+# *_parsed_results.jsonl  # Commented out to allow committing parsed results
 
 # Evaluation and analysis results
-evaluation_*.csv
-*_evaluation.csv
+# evaluation_*.csv  # Commented out to allow committing evaluation CSVs
+# *_evaluation.csv
 openrouter_prompts_responses.csv
 
 # Generated reports and summaries
@@ -348,12 +348,12 @@ openrouter_prompts_responses.csv
 
 # Additional research-specific patterns
 # Ignore large model output files but keep sample data
-**/responses/
-**/BenchmarkTest*.txt
+# **/responses/  # Commented out to allow committing responses
+# **/BenchmarkTest*.txt  # Commented out to allow committing prompts
 
 # Ignore individual model analysis results but keep aggregated data
-**/CWE-*/**/parsed_results.jsonl
-**/CWE-*/**/evaluation_*.csv
+# **/CWE-*/**/parsed_results.jsonl  # Commented out to allow committing parsed results
+# **/CWE-*/**/evaluation_*.csv  # Commented out to allow committing evaluation CSVs
 
 # Keep important SARIF files for analysis
 !**/sarif-files/*.sarif
