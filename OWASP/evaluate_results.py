@@ -6,12 +6,12 @@ This script evaluates LLM analysis results against ground truth data.
 It processes all responses in a run folder and creates a comprehensive evaluation CSV.
 """
 
+import argparse
+import csv
+import json
 import os
 import sys
-import json
-import csv
-import argparse
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set, Tuple
 
 
 def load_ground_truth(ground_truth_csv: str) -> Dict[str, Dict]:
@@ -116,7 +116,7 @@ def parse_llm_response(response_file: str) -> Dict:
         
         # Method 4: Look for JSON-like content using regex patterns
         import re
-        
+
         # Pattern 1: Look for content between curly braces that might be JSON
         json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
         matches = re.findall(json_pattern, content, re.DOTALL)
@@ -359,7 +359,8 @@ def evaluate_run(ground_truth_csv: str, cwe_number: str, run_folder: str, model:
         if processed_count % 10 == 0:
             print(f"Processed {processed_count}/{len(response_files)} responses...")
     # Compose base filename
-    model_part = f"_{model}" if model else ""
+    # Windows doesn't allow colons in filenames, so replace : with -
+    model_part = f"_{model.replace(':', '-')}" if model else ""
     base_filename = f"evaluation_{cwe_number}{model_part}"
     # Write unfiltered CSV
     import pandas as pd

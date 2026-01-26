@@ -66,10 +66,11 @@ class AnalysisJob:
         Auto-generate job_id if not provided.
         
         Job ID format: {prompt_version}_{dataset}_{cwe}_{model}
-        Model names with "/" are sanitized to "_" for filesystem compatibility.
+        Model names with "/" are sanitized to "_" and ":" to "-" for filesystem compatibility.
+        Windows doesn't allow colons in filenames.
         """
         if not self.job_id:
-            self.job_id = f"{self.prompt_version}_{self.dataset}_{self.cwe}_{self.model.replace('/', '_')}"
+            self.job_id = f"{self.prompt_version}_{self.dataset}_{self.cwe}_{self.model.replace('/', '_').replace(':', '-')}"
 
 class ProgressTracker:
     """

@@ -663,9 +663,10 @@ def create_run_directories(prompt_version: str, dataset: str, cwe_id: str, model
     Returns:
         tuple: (run_dir, prompts_dir, responses_dir, jsonl_file_path)
     """
-    # Create the main run directory - replace forward slashes with underscores for safe directory names
-    # Model names like "openai/gpt-4o" need to be sanitized for filesystem
-    safe_model_name = model.replace("/", "_")
+    # Create the main run directory - replace forward slashes and colons with safe characters for filesystem compatibility
+    # Model names like "openai/gpt-4o" or "cliproxy:gemini-2.5-pro" need to be sanitized for filesystem
+    # Windows doesn't allow colons in filenames, so replace : with -
+    safe_model_name = model.replace("/", "_").replace(":", "-")
     run_dir_name = f"{prompt_version}_{dataset}_{cwe_id}_{safe_model_name}"
     run_dir = os.path.join(base_dir, run_dir_name)
     
@@ -875,7 +876,8 @@ def main():
                 
                 # Create unique filename for this test case
                 # Format: {test_case_name}_{model}
-                safe_model_name = args.model.replace("/", "_")
+                # Windows doesn't allow colons in filenames, so replace : with -
+                safe_model_name = args.model.replace("/", "_").replace(":", "-")
                 filename_stub = f"{test_case_name}_{safe_model_name}"
 
                 # Skip if response already exists (allows resuming interrupted runs)

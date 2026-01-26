@@ -10,7 +10,7 @@ SARIF_PATH = "input_files/sarif_results/owasp-benchmark/Benchmark_1.2-Semgrep-v1
 
 # Đặt CWE cần đánh giá (chỉ số, không có 'CWE-')
 # Ví dụ: "90" (LDAP Injection), "89" (SQLi), "79" (XSS), ...
-TARGET_CWE = "328"
+TARGET_CWE = "89"
 
 
 def iter_test_names_from_result(result):

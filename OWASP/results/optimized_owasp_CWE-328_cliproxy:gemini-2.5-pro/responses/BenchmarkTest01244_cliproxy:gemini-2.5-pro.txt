@@ -1,8 +1,0 @@
-```json
-{
-  "False Positive": "No",
-  "Sanitization Found?": "Yes",
-  "Attack Feasible?": "Yes",
-  "Confidence": "High"
-}
-```
