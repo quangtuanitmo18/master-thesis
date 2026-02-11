@@ -24,6 +24,38 @@ MODEL_PRICING = {
         "input": 0.00125,  # $1.25 per 1M tokens = $0.00125 per 1K tokens for input
         "output": 0.01     # $10 per 1M tokens = $0.01 per 1K tokens for output
     },
+    "gpt-5-codex": {
+        "input": 0.00125,  # Estimated pricing (same as gpt-5)
+        "output": 0.01
+    },
+    "gpt-5-codex-mini": {
+        "input": 0.000625,  # Estimated pricing (half of gpt-5)
+        "output": 0.005
+    },
+    "gpt-5.1": {
+        "input": 0.00125,  # Estimated pricing (same as gpt-5)
+        "output": 0.01
+    },
+    "gpt-5.1-codex": {
+        "input": 0.00125,  # Estimated pricing (same as gpt-5)
+        "output": 0.01
+    },
+    "gpt-5.1-codex-mini": {
+        "input": 0.000625,  # Estimated pricing (half of gpt-5)
+        "output": 0.005
+    },
+    "gpt-5.1-codex-max": {
+        "input": 0.0025,  # Estimated pricing (double of gpt-5)
+        "output": 0.02
+    },
+    "gpt-5.2": {
+        "input": 0.00125,  # Estimated pricing (same as gpt-5)
+        "output": 0.01
+    },
+    "gpt-5.2-codex": {
+        "input": 0.00125,  # Estimated pricing (same as gpt-5)
+        "output": 0.01
+    },
     "gpt-4": {
         "input": 0.03,  # $0.03 per 1K tokens for input
         "output": 0.06  # $0.06 per 1K tokens for output
@@ -118,6 +150,11 @@ MODEL_PRICING = {
     "deepseek/deepseek-r1": {
         "input": 0.00014,  # $0.00014 per 1K tokens for input
         "output": 0.00028  # $0.00028 per 1K tokens for output
+    },
+    # TngTech Models (via OpenRouter)
+    "tngtech/deepseek-r1t2-chimera:free": {
+        "input": 0.0,       # Free tier - no cost for input
+        "output": 0.0       # Free tier - no cost for output
     },
     # Google Models (via OpenRouter)
     "google/gemini-1.5-flash": {
@@ -214,6 +251,24 @@ MODEL_PRICING = {
         "input": 0.00005,   # $0.05 per 1M tokens = $0.00005 per 1K tokens for input
         "output": 0.0002    # $0.20 per 1M tokens = $0.0002 per 1K tokens for output
     },
+    # Qwen Models (via CLIProxyAPI)
+    "qwen3-coder-plus": {
+        "input": 0.0002,    # $0.20 per 1M tokens = $0.0002 per 1K tokens for input
+        "output": 0.0008    # $0.80 per 1M tokens = $0.0008 per 1K tokens for output
+    },
+    "qwen3-coder-flash": {
+        "input": 0.0001,    # $0.10 per 1M tokens = $0.0001 per 1K tokens for input
+        "output": 0.0004    # $0.40 per 1M tokens = $0.0004 per 1K tokens for output
+    },
+    # Claude Models (via CLIProxyAPI)
+    "gemini-claude-sonnet-4-5": {
+        "input": 0.003,     # $0.003 per 1K tokens for input
+        "output": 0.015     # $0.015 per 1K tokens for output
+    },
+    "gemini-claude-sonnet-4-5-thinking": {
+        "input": 0.003,     # $0.003 per 1K tokens for input
+        "output": 0.015     # $0.015 per 1K tokens for output
+    },
     # Meta Llama Models (via OpenRouter)
     "meta-llama/llama-3.1-70b-instruct": {
         "input": 0.0001,    # $0.10 per 1M tokens = $0.0001 per 1K tokens for input
@@ -264,6 +319,70 @@ MODEL_CONFIGS = {
         "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
         "tokenizer": "gpt-4",
         "description": "GPT-5 model with full parameter support",
+        "provider": "openai"
+    },
+    "gpt-5-codex": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5 Codex model optimized for code generation",
+        "provider": "openai"
+    },
+    "gpt-5-codex-mini": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5 Codex Mini - smaller, faster version for code tasks",
+        "provider": "openai"
+    },
+    "gpt-5.1": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.1 model - improved version of GPT-5",
+        "provider": "openai"
+    },
+    "gpt-5.1-codex": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.1 Codex model - improved code generation model",
+        "provider": "openai"
+    },
+    "gpt-5.1-codex-mini": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.1 Codex Mini - smaller, faster improved code model",
+        "provider": "openai"
+    },
+    "gpt-5.1-codex-max": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.1 Codex Max - largest, most capable code model",
+        "provider": "openai"
+    },
+    "gpt-5.2": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.2 model - latest version of GPT-5",
+        "provider": "openai"
+    },
+    "gpt-5.2-codex": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "GPT-5.2 Codex model - latest code generation model",
         "provider": "openai"
     },
     "gpt-4": {
@@ -451,6 +570,15 @@ MODEL_CONFIGS = {
         "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
         "tokenizer": "gpt-4",
         "description": "DeepSeek R1 model with full parameter support",
+        "provider": "openrouter"
+    },
+    # TngTech Models (via OpenRouter)
+    "tngtech/deepseek-r1t2-chimera:free": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "TngTech DeepSeek R1T2 Chimera model (free tier) with full parameter support",
         "provider": "openrouter"
     },
     # Google Models (via OpenRouter)
@@ -730,6 +858,38 @@ MODEL_CONFIGS = {
         "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
         "tokenizer": "gpt-4",
         "description": "Google Gemini 3 Flash Preview via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "qwen3-coder-plus": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Qwen3 Coder Plus via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "qwen3-coder-flash": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Qwen3 Coder Flash via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-claude-sonnet-4-5": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Gemini Claude Sonnet 4.5 via CLIProxyAPI",
+        "provider": "cliproxyapi"
+    },
+    "gemini-claude-sonnet-4-5-thinking": {
+        "max_temperature": 2.0,
+        "default_temperature": 0.0,
+        "supported_parameters": ["temperature", "max_tokens", "top_p", "frequency_penalty", "presence_penalty"],
+        "tokenizer": "gpt-4",
+        "description": "Gemini Claude Sonnet 4.5 Thinking via CLIProxyAPI",
         "provider": "cliproxyapi"
     }
 }

@@ -1,0 +1,5 @@
+test_name,response_file,ground_truth_category,ground_truth_is_vulnerable,ground_truth_cwe,ground_truth_expected,llm_Attack Feasible?,llm_Confidence,llm_False Positive,llm_Sanitization Found?
+BenchmarkTest00004,BenchmarkTest00004_cliproxy-gemini-2.5-pro.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00001,BenchmarkTest00001_cliproxy-gemini-2.5-pro.txt,pathtraver,True,22,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00012,BenchmarkTest00012_cliproxy-gemini-2.5-pro.txt,ldapi,True,90,Vulnerable,Yes,High,No,Yes
+BenchmarkTest00002,BenchmarkTest00002_cliproxy-gemini-2.5-pro.txt,pathtraver,True,22,Vulnerable,No,High,Yes,No

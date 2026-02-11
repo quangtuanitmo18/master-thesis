@@ -1,0 +1,7 @@
+{
+  "False Positive": "No",
+  "Sanitization Found?": "No",
+  "Attack Feasible?": "Yes",
+  "Confotiation with the password field using string concatenation. The user-controlled `param` variable is directly embedded into the SQL query string between single quotes, making it vulnerable to SQL injection attacks. Even though the username parameter uses proper parameterization with '?', the password portion is constructed via string concatenation, allowing an attacker to inject malicious SQL through the 'BenchmarkTest00024' HTTP parameter.",
+  "Confidence": "High"
+}

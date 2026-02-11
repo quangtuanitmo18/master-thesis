@@ -1,0 +1,202 @@
+System role:
+You are a security analyst adjudicating static analysis alerts for CWE-643 (XPath Injection).
+Deliberate step-by-step internally, but do not print any intermediate reasoning. Return only the required JSON.
+
+Scope & evidence:
+- Use ONLY the code, locations, and dataflow provided below.
+- Do not assume behavior of code that is not shown (e.g., sanitizer implementations, XML parser configs).
+- Base your decision strictly on the provided snippet and trace.
+
+Rubric (CWE-643 micro-rules):
+- XPath injection occurs when untrusted input is inserted into an XPath/XQuery expression such that it can alter query structure, predicates, or operators.
+- High risk (likely NOT a false positive):
+  - Building XPath/XQuery via string concatenation and passing to evaluators (e.g., javax.xml.xpath.XPath#evaluate/compile, XPathExpression#evaluate, Saxon evaluators).
+  - Untrusted data used in predicates, attribute tests, or path fragments, e.g.:
+    "/users/user[name/text()='" + name + "']"
+    "//*[@id=" + id + "]"
+    "//" + nodeName + "/@role"
+  - User-controlled fragments that can inject metacharacters/operators: quotes (' "), brackets ( [ ] ), parentheses ( ), wildcard *, axes/operators (|, and, or, =, !=), function names.
+- Safer patterns (often a false positive):
+  - Variable binding with the XPath engine (e.g., XPathVariableResolver or Saxon s9api with declared variables) where user input is supplied as a typed variable value—NOT concatenated into the expression text.
+  - Strict allowlists/mappings for identifiers (node/attribute names, axes) and for small enums (e.g., sort keys), plus numeric parsing with range checks for indexes.
+  - Avoiding XPath construction entirely by using safe DOM APIs (e.g., getElementsByTagName, attribute access) or fixed, precompiled expressions that do not include untrusted text.
+- Not sanitizers / insufficient alone:
+  - HTML/URL/XML escaping applied blindly; replacing only quotes; generic regex blacklists; length checks; trimming.
+  - Escaping that does not cover all XPath metacharacters or does not prevent structural changes.
+- Context notes:
+  - Different contexts (string literal, numeric, identifier) have different hazards; identifier/axis contexts cannot be “parameterized”—require allowlists.
+  - DTD/XXE hardening is good practice but does NOT address XPath injection itself.
+- If key facts are missing (unknown escaping or variable binding), be conservative: prefer “not a false positive” with Low confidence rather than guess.
+
+Interpretation of fields for this CWE:
+- “Sanitization Found?” = presence of robust mitigations (true variable binding; strict allowlists; safe DOM usage with no concatenation).
+- “Attack Feasible?” = given the shown code, could an attacker alter the XPath to access/modify unintended nodes or bypass checks?
+
+Internal reasoning checklist (do NOT include your notes in the output):
+1) Identify user-controlled sources and confirm they reach an XPath/XQuery evaluation sink.
+2) Determine whether the query string is built via concatenation vs a fixed expression with variable binding.
+3) If concatenation is present, locate the exact insertion points and assess whether metacharacters could change structure.
+4) Check for effective mitigations: variable binding, strict allowlists (identifiers/enums), numeric parsing with bounds.
+5) Decide if injection is feasible; set confidence based on visibility and certainty.
+6) Produce the JSON verdict with appropriate confidence.
+
+--------------------------------
+Case to adjudicate (filled from CodeQL)
+--------------------------------
+A potential XPath injection vulnerability (CWE-643) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.tainted-xpath-from-http-request.tainted-xpath-from-http-request
+Message: Detected input from a HTTPServletRequest going into a XPath evaluate or compile command. This could lead to xpath injection if variables passed into the evaluate or compile commands are not properly sanitized. Xpath injection could lead to unauthorized access to sensitive information in XML documents. Instead, thoroughly sanitize user input or use parameterized xpath queries if you can.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest01632 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        String[] values = request.getParameterValues("BenchmarkTest01632");
+        String param;
+        if (values != null && values.length > 0) param = values[0];
+        else param = "";
+
+        String bar = new Test().doSomething(request, param);
+
+        try {
+            java.io.FileInputStream file =
+                    new java.io.FileInputStream(
+                            org.owasp.benchmark.helpers.Utils.getFileFromClasspath(
+                                    "employees.xml", this.getClass().getClassLoader()));
+            javax.xml.parsers.DocumentBuilderFactory builderFactory =
+                    javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            // Prevent XXE
+            builderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            javax.xml.parsers.DocumentBuilder builder = builderFactory.newDocumentBuilder();
+            org.w3c.dom.Document xmlDocument = builder.parse(file);
+            javax.xml.xpath.XPathFactory xpf = javax.xml.xpath.XPathFactory.newInstance();
+            javax.xml.xpath.XPath xp = xpf.newXPath();
+
+            String expression = "/Employees/Employee[@emplid='" + bar + "']";
+            org.w3c.dom.NodeList nodeList =
+                    (org.w3c.dom.NodeList)
+                            xp.compile(expression)
+                                    .evaluate(xmlDocument, javax.xml.xpath.XPathConstants.NODESET);
+
+            response.getWriter().println("Your query results are: <br/>");
+
+            for (int i = 0; i < nodeList.getLength(); i++) {
+                org.w3c.dom.Element value = (org.w3c.dom.Element) nodeList.item(i);
+                response.getWriter().println(value.getTextContent() + "<br/>");
+            }
+        } catch (javax.xml.xpath.XPathExpressionException
+                | javax.xml.parsers.ParserConfigurationException
+                | org.xml.sax.SAXException e) {
+            response.getWriter()
+                    .println(
+                            "Error parsing XPath input: '"
+                                    + org.owasp.esapi.ESAPI.encoder().encodeForHTML(bar)
+                                    + "'");
+            throw new ServletException(e);
+        }
+    } // end doPost
+
+    private class Test {
+
+        public String doSomething(HttpServletRequest request, String param)
+                throws ServletException, IOException {
+
+            String bar;
+            String guess = "ABC";
+            char switchTarget = guess.charAt(1); // condition 'B', which is safe
+
+            // Simple case statement that assigns param to bar on conditions 'A', 'C', or 'D'
+            switch (switchTarget) {
+                case 'A':
+                    bar = param;
+                    break;
+                case 'B':
+                    bar = "bob";
+                    break;
+                case 'C':
+                case 'D':
+                    bar = param;
+                    break;
+                default:
+                    bar = "bob's your uncle";
+                    break;
+            }
+
+            return bar;
+        }
+    } // end innerclass Test
+} // end DataflowThruInnerClass
+
+Vulnerability Location:
+"xp.compile(expression)" in the following line of code (line 67) has been detected by the static analyzer as the vulnerability location:
+
+                            xp.compile(expression)
+
+Dataflow Trace:
+[1] SOURCE:
+String[] values = [[[request.getParameterValues("BenchmarkTest01632");]]]
+ // [DATAFLOW STEP]
+
+Message: Source: 'request.getParameterValues("BenchmarkTest01632")' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:43'
+
+[2] STEP:
+String[] [[[values ]]]= request.getParameterValues("BenchmarkTest01632");
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'values' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:43'
+
+[3] STEP:
+if (values != null && values.length > 0) [[[param ]]]= values[0];
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'param' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:45'
+
+[4] STEP:
+String [[[bar ]]]= new Test().doSomething(request, param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'bar' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:48'
+
+[5] STEP:
+String [[[expression ]]]= "/Employees/Employee[@emplid='" + bar + "']";
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'expression' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:64'
+
+[6] SINK:
+xp.compile(expression)
+                                    .evaluate(xmlDocument, javax.xml.xpath.XPathConstants.NODESET);
+
+Message: Sink: 'xp.compile(expression)
+                                    .evaluate(xmlDocument, javax.xml.xpath.XPathConstants.NODESET);' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest01632.java:67'
+
+IMPORTANT OUTPUT RULES:
+- Think step-by-step using the checklist, but DO NOT include your intermediate notes.
+- Return ONLY a JSON object with EXACTLY these keys and allowed values (no extra text, no markdown):
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}

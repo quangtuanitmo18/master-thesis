@@ -1,0 +1,179 @@
+System role:
+You are a security analyst adjudicating static analysis alerts for CWE-090 (LDAP Injection).
+Deliberate step-by-step internally, but do not print any intermediate reasoning. Return only the required JSON.
+
+Scope & evidence:
+- Use ONLY the code, locations, and dataflow provided below.
+- Do not assume behavior of code that is not shown (e.g., sanitizer implementations, LDAP server config).
+- Base your decision strictly on the provided snippet and trace.
+
+Rubric (CWE-090 micro-rules):
+- LDAP injection occurs when untrusted input is inserted into LDAP filters or Distinguished Names (DNs) without proper, context-specific escaping/validation.
+- High risk (likely NOT a false positive):
+  - Building filter strings via concatenation, e.g., "(&(uid=" + user + ")(objectClass=person))".
+  - User-controlled fragments that can close/open filter groups or add wildcards/operators: ')', '(', '*', '&', '|', '!' or backslash escape injection.
+  - Constructing DNs from untrusted data without DN-aware escaping (e.g., "cn=" + name + ",ou=people,dc=...").
+- Safer patterns (often a false positive):
+  - Proper, context-appropriate escaping:
+    - Filter context (RFC 4515): escaping at least `* ( ) \` and NUL in untrusted values before insertion.
+    - DN context (RFC 4514): using DN-safe builders (e.g., LdapName/Rdn in Java) or APIs that escape special DN characters and handle leading/trailing spaces and leading '#'.
+  - APIs or libraries that parameterize/escape filter values automatically (e.g., Spring LDAP’s LdapQueryBuilder with arguments; safe DN builders using Rdn.add()).
+  - Strict allowlists mapping user input to a bounded set of known attribute values or identifiers.
+- Not sanitizers / insufficient alone:
+  - Length checks; blacklists of a few characters; HTML/URL encoding; generic regex without explicit coverage of LDAP metacharacters; naive replace() escaping.
+- Context notes:
+  - Filter vs DN contexts require different escaping. Escaping for one is not necessarily safe for the other.
+  - Wildcard control (`*`) in substring filters must be treated carefully; presence of unescaped '*' from user input is risky.
+  - Attribute names (identifiers) cannot be “parameterized”; if user controls attribute names or operators, require strict allowlist.
+- If key facts are missing (unknown escaping, incomplete path), be conservative: prefer “not a false positive” with Low confidence rather than guess.
+
+Internal reasoning checklist (do NOT include your notes in the output):
+1) Identify user-controlled sources and confirm they reach an LDAP sink (e.g., DirContext.search, lookup/bind with constructed DN).
+2) Determine the context of insertion: filter string vs DN vs attribute name/operator.
+3) Check for appropriate escaping/validation for that context (filter-escape vs DN-safe construction; allowlists for identifiers).
+4) Verify whether user input can alter filter logic (inject operators, wildcards, parentheses) or DN structure.
+5) Decide if injection is feasible; set confidence based on visibility and certainty.
+6) Produce the JSON verdict with appropriate confidence.
+
+--------------------------------
+Case to adjudicate (filled from CodeQL)
+--------------------------------
+A potential LDAP injection vulnerability (CWE-090) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.tainted-ldapi-from-http-request.tainted-ldapi-from-http-request
+Message: Detected input from a HTTPServletRequest going into an LDAP query. This could lead to LDAP injection if the input is not properly sanitized, which could result in attackers modifying objects in the LDAP tree structure. Ensure data passed to an LDAP query is not controllable or properly sanitize the data.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest02306 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        String param = "";
+        boolean flag = true;
+        java.util.Enumeration<String> names = request.getParameterNames();
+        while (names.hasMoreElements() && flag) {
+            String name = (String) names.nextElement();
+            String[] values = request.getParameterValues(name);
+            if (values != null) {
+                for (int i = 0; i < values.length && flag; i++) {
+                    String value = values[i];
+                    if (value.equals("BenchmarkTest02306")) {
+                        param = name;
+                        flag = false;
+                    }
+                }
+            }
+        }
+
+        String bar = doSomething(request, param);
+
+        org.owasp.benchmark.helpers.LDAPManager ads = new org.owasp.benchmark.helpers.LDAPManager();
+        try {
+            response.setContentType("text/html;charset=UTF-8");
+            String base = "ou=users,ou=system";
+            javax.naming.directory.SearchControls sc = new javax.naming.directory.SearchControls();
+            sc.setSearchScope(javax.naming.directory.SearchControls.SUBTREE_SCOPE);
+            String filter = "(&(objectclass=person)(uid=" + bar + "))";
+
+            javax.naming.directory.DirContext ctx = ads.getDirContext();
+            javax.naming.directory.InitialDirContext idc =
+                    (javax.naming.directory.InitialDirContext) ctx;
+            boolean found = false;
+            javax.naming.NamingEnumeration<javax.naming.directory.SearchResult> results =
+                    idc.search(base, filter, sc);
+
+            while (results.hasMore()) {
+                javax.naming.directory.SearchResult sr =
+                        (javax.naming.directory.SearchResult) results.next();
+                javax.naming.directory.Attributes attrs = sr.getAttributes();
+
+                javax.naming.directory.Attribute attr = attrs.get("uid");
+                javax.naming.directory.Attribute attr2 = attrs.get("street");
+                if (attr != null) {
+                    response.getWriter()
+                            .println(
+                                    "LDAP query results:<br>"
+                                            + "Record found with name "
+                                            + attr.get()
+                                            + "<br>"
+                                            + "Address: "
+                                            + attr2.get()
+                                            + "<br>");
+                    // System.out.println("record found " + attr.get());
+                    found = true;
+                }
+            }
+            if (!found) {
+                response.getWriter()
+                        .println(
+                                "LDAP query results: nothing found for query: "
+                                        + org.owasp.esapi.ESAPI.encoder().encodeForHTML(filter));
+            }
+        } catch (javax.naming.NamingException e) {
+            throw new ServletException(e);
+        } finally {
+            try {
+                ads.closeDirContext();
+            } catch (Exception e) {
+                throw new ServletException(e);
+            }
+        }
+    } // end doPost
+
+    private static String doSomething(HttpServletRequest request, String param)
+            throws ServletException, IOException {
+
+        org.owasp.benchmark.helpers.ThingInterface thing =
+                org.owasp.benchmark.helpers.ThingFactory.createThing();
+        String bar = thing.doSomething(param);
+
+        return bar;
+    }
+}
+
+Vulnerability Location:
+"idc.search(base, filter, sc);" in the following line of code (line 75) has been detected by the static analyzer as the vulnerability location:
+
+                    [[[idc.search(base, filter, sc)]]];
+
+Dataflow Trace:
+[1] SOURCE:
+doPost([[[request,]]] response);
+ // [DATAFLOW STEP]
+
+Message: Source: 'request' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02306.java:35'
+
+[2] SINK:
+[[[idc.search(base, filter, sc);]]]
+ // [DATAFLOW STEP]
+
+Message: Sink: 'idc.search(base, filter, sc);' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02306.java:75'
+
+IMPORTANT OUTPUT RULES:
+- Think step-by-step using the checklist, but DO NOT include your intermediate notes.
+- Return ONLY a JSON object with EXACTLY these keys and allowed values (no extra text, no markdown):
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}

@@ -1,0 +1,26 @@
+test_name,response_file,ground_truth_category,ground_truth_is_vulnerable,ground_truth_cwe,ground_truth_expected,llm_Attack Feasible?,llm_Confidence,llm_False Positive,llm_Sanitization Found?
+BenchmarkTest00002,BenchmarkTest00002_cliproxy-qwen3-coder-plus.txt,pathtraver,True,22,Vulnerable,No,High,Yes,No
+BenchmarkTest00012,BenchmarkTest00012_cliproxy-qwen3-coder-plus.txt,ldapi,True,90,Vulnerable,Yes,High,No,No
+BenchmarkTest00097,BenchmarkTest00097_cliproxy-qwen3-coder-plus.txt,trustbound,False,501,Safe,No,High,Yes,Yes
+BenchmarkTest00045,BenchmarkTest00045_cliproxy-qwen3-coder-plus.txt,pathtraver,True,22,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00044,BenchmarkTest00044_cliproxy-qwen3-coder-plus.txt,ldapi,True,90,Vulnerable,Yes,High,No,No
+BenchmarkTest00063,BenchmarkTest00063_cliproxy-qwen3-coder-plus.txt,pathtraver,False,22,Safe,No,High,Yes,Yes
+BenchmarkTest00028,BenchmarkTest00028_cliproxy-qwen3-coder-plus.txt,pathtraver,True,22,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00099,BenchmarkTest00099_cliproxy-qwen3-coder-plus.txt,trustbound,False,501,Safe,No,High,Yes,Yes
+BenchmarkTest00041,BenchmarkTest00041_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00021,BenchmarkTest00021_cliproxy-qwen3-coder-plus.txt,ldapi,True,90,Vulnerable,Yes,High,No,No
+BenchmarkTest00047,BenchmarkTest00047_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00064,BenchmarkTest00064_cliproxy-qwen3-coder-plus.txt,pathtraver,False,22,Safe,No,High,Yes,Yes
+BenchmarkTest00117,BenchmarkTest00117_cliproxy-qwen3-coder-plus.txt,xpathi,False,643,Safe,No,High,Yes,Unsure
+BenchmarkTest00031,BenchmarkTest00031_cliproxy-qwen3-coder-plus.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00065,BenchmarkTest00065_cliproxy-qwen3-coder-plus.txt,pathtraver,True,22,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00030,BenchmarkTest00030_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00014,BenchmarkTest00014_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00001,BenchmarkTest00001_cliproxy-qwen3-coder-plus.txt,pathtraver,True,22,Vulnerable,No,High,Yes,Yes
+BenchmarkTest00025,BenchmarkTest00025_cliproxy-qwen3-coder-plus.txt,sqli,True,89,Vulnerable,No,High,Yes,No
+BenchmarkTest00013,BenchmarkTest00013_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00048,BenchmarkTest00048_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00049,BenchmarkTest00049_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00036,BenchmarkTest00036_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00118,BenchmarkTest00118_cliproxy-qwen3-coder-plus.txt,xpathi,False,643,Safe,Yes,High,No,No
+BenchmarkTest00004,BenchmarkTest00004_cliproxy-qwen3-coder-plus.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes

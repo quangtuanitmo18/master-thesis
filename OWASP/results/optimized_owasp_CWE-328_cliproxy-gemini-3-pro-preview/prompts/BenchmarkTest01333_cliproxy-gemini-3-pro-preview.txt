@@ -1,0 +1,162 @@
+System role:
+You are a security analyst adjudicating static analysis alerts for CWE-328 (Use of Weak Hash).
+Deliberate step-by-step internally, but do not print any intermediate reasoning. Return only the required JSON.
+
+Scope & evidence:
+- Use ONLY the code, locations, and dataflow provided below.
+- Do not assume behavior of libraries or configuration that is not shown (e.g., TLS settings, secret storage, "it's only for cache").
+- Base your decision strictly on the provided snippet and trace.
+
+Rubric (CWE-328 micro-rules):
+- CWE-328 flags the use of weak, deprecated, or inappropriate hash functions in security-relevant contexts.
+- High risk (likely NOT a false positive):
+  - Weak/broken hashes used for security properties (integrity/authenticity/anti-tamper/passwords): MD5, SHA-1, "MD4", "RIPEMD160" (for new security uses), CRC32/adler32, or custom hashes.
+  - Password hashing implemented with fast general-purpose hashes (MD5/SHA-1/SHA-256/SHA-512) without a password KDF (bcrypt/scrypt/Argon2/PBKDF2) and without per-user salt/work factor.
+  - Hash used as an integrity check over attacker-controlled data without a keyed MAC (e.g., plain SHA-256(data) as "signature") where attackers can recompute it.
+  - Hash used in token/signature-like workflows where collision/preimage resistance matters and the algorithm is weak or deprecated.
+- Safer patterns (often a false positive):
+  - Modern hashes for non-password uses where hash is the right primitive: SHA-256/SHA-512/SHA-3, BLAKE2/BLAKE3 (if shown), used appropriately.
+  - Keyed integrity/authenticity uses HMAC (e.g., HmacSHA256) or a proper signature scheme, not a plain hash.
+  - Password storage uses a password KDF (bcrypt/scrypt/Argon2/PBKDF2) with per-user salt and appropriate work factor/iterations.
+  - Legacy weak hash used ONLY for non-adversarial purposes clearly shown in code (e.g., checksum for accidental corruption, internal dedup/cache keys) and not used for security decisions. If purpose is unclear, treat as security-relevant.
+- Not sanitizers / insufficient alone:
+  - "Salting" a weak hash for integrity/authenticity without a secret key; "pepper" stored alongside the code; Base64/hex encoding; length checks.
+  - Hashing an input does not make it safe if the hash is used as a security proof without a secret (attackers can recompute).
+- Context notes:
+  - If the algorithm name is selected dynamically (string-based algorithm selection), ensure it’s not attacker-controlled and that weak algorithms are not allowed.
+  - If key facts are missing (unknown purpose, missing call site), be conservative: prefer "not a false positive" with Low confidence rather than guess.
+
+Interpretation of fields for this CWE:
+- "Sanitization Found?" = evidence of an appropriate mitigation: upgraded to a strong modern hash where appropriate, HMAC/signature for integrity/authenticity, or password KDF for password storage/verification.
+- "Attack Feasible?" = given the shown context, could an attacker realistically exploit weak hashing (collision, forgery, offline cracking, recomputation of "integrity" hashes)?
+
+Internal reasoning checklist (do NOT include your notes in the output):
+1) Identify the hash algorithm(s) used and how they are selected (constants vs dynamic).
+2) Determine the security purpose (password storage, integrity/authenticity, token/signature, checksum/dedup/cache).
+3) If password-related: verify use of password KDF + per-user salt + work factor; fast hashes are unsafe.
+4) If integrity/authenticity: verify keyed MAC (HMAC) or signatures; plain hashes over attacker-controlled data are not sufficient.
+5) If "non-security use" is claimed: confirm via code that it is not used for auth, access control, or trust decisions.
+6) Decide if exploitation is feasible; set confidence based on visibility and certainty.
+7) Produce the JSON verdict with appropriate confidence.
+
+--------------------------------
+Case to adjudicate (filled from CodeQL)
+--------------------------------
+A potential weak hash vulnerability (CWE-328) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.crypto.use-of-md5.use-of-md5
+Message: Detected MD5 hash algorithm which is considered insecure. MD5 is not collision resistant and is therefore not suitable as a cryptographic signature. Use HMAC instead.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest01333 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        java.util.Map<String, String[]> map = request.getParameterMap();
+        String param = "";
+        if (!map.isEmpty()) {
+            String[] values = map.get("BenchmarkTest01333");
+            if (values != null) param = values[0];
+        }
+
+        String bar = new Test().doSomething(request, param);
+
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] input = {(byte) '?'};
+            Object inputParam = bar;
+            if (inputParam instanceof String) input = ((String) inputParam).getBytes();
+            if (inputParam instanceof java.io.InputStream) {
+                byte[] strInput = new byte[1000];
+                int i = ((java.io.InputStream) inputParam).read(strInput);
+                if (i == -1) {
+                    response.getWriter()
+                            .println(
+                                    "This input source requires a POST, not a GET. Incompatible UI for the InputStream source.");
+                    return;
+                }
+                input = java.util.Arrays.copyOf(strInput, i);
+            }
+            md.update(input);
+
+            byte[] result = md.digest();
+            java.io.File fileTarget =
+                    new java.io.File(
+                            new java.io.File(org.owasp.benchmark.helpers.Utils.TESTFILES_DIR),
+                            "passwordFile.txt");
+            java.io.FileWriter fw =
+                    new java.io.FileWriter(fileTarget, true); // the true will append the new data
+            fw.write(
+                    "hash_value="
+                            + org.owasp.esapi.ESAPI.encoder().encodeForBase64(result, true)
+                            + "\n");
+            fw.close();
+            response.getWriter()
+                    .println(
+                            "Sensitive value '"
+                                    + org.owasp
+                                            .esapi
+                                            .ESAPI
+                                            .encoder()
+                                            .encodeForHTML(new String(input))
+                                    + "' hashed and stored<br/>");
+
+        } catch (java.security.NoSuchAlgorithmException e) {
+            System.out.println("Problem executing hash - TestCase");
+            throw new ServletException(e);
+        }
+
+        response.getWriter()
+                .println(
+                        "Hash Test java.security.MessageDigest.getInstance(java.lang.String) executed");
+    } // end doPost
+
+    private class Test {
+
+        public String doSomething(HttpServletRequest request, String param)
+                throws ServletException, IOException {
+
+            String bar = org.owasp.esapi.ESAPI.encoder().encodeForHTML(param);
+
+            return bar;
+        }
+    } // end innerclass Test
+} // end DataflowThruInnerClass
+
+Vulnerability Location:
+""MD5")" in the following line of code (line 53) has been detected by the static analyzer as the vulnerability location:
+
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance([[["MD5"]]]);
+
+Dataflow Trace:
+No dataflow information is available for this finding.
+
+IMPORTANT OUTPUT RULES:
+- Think step-by-step using the checklist, but DO NOT include your intermediate notes.
+- Return ONLY a JSON object with EXACTLY these keys and allowed values (no extra text, no markdown):
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}
+

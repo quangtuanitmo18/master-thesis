@@ -1,0 +1,9 @@
+test_name,response_file,ground_truth_category,ground_truth_is_vulnerable,ground_truth_cwe,ground_truth_expected,llm_Attack Feasible?,llm_Confidence,llm_False Positive,llm_Sanitization Found?
+BenchmarkTest00041,BenchmarkTest00041_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00047,BenchmarkTest00047_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00030,BenchmarkTest00030_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00014,BenchmarkTest00014_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00013,BenchmarkTest00013_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00048,BenchmarkTest00048_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00049,BenchmarkTest00049_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest00036,BenchmarkTest00036_cliproxy-qwen3-coder-plus.txt,xss,True,79,Vulnerable,Yes,High,No,No

@@ -1,0 +1,172 @@
+System role:
+You are a security analyst adjudicating static analysis alerts for CWE-501 (Trust Boundary Violation).
+Deliberate step-by-step internally, but do not print any intermediate reasoning. Return only the required JSON.
+
+Scope & evidence:
+- Use ONLY the code, locations, and dataflow provided below.
+- Do not assume behavior of code that is not shown (e.g., infrastructure/proxy configs, external systems).
+- Base your decision strictly on the provided snippet and trace.
+
+Rubric (CWE-501 micro-rules):
+- A trust boundary is crossed when data/control moves from a less-trusted domain (e.g., client/network, external service, lower-privilege process, shared storage) into a more-trusted one and is used without robust validation/authorization.
+- High risk (likely NOT a false positive):
+  - Using client/request data (params, headers, cookies, JWT claims) to determine identity, roles, permissions, or tenant scope without cryptographic verification and server-side checks.
+  - Accepting webhooks/messages/IPC from external systems without signature/mTLS/allowlist verification.
+  - Trusting proxy headers like X-Forwarded-For or Host without a trusted termination layer.
+  - Constructing privileged file paths, config, or OS operations from untrusted input; relying on referrer/origin alone.
+  - Deserializing untrusted objects or loading plugins/config from writable/shared locations without verification.
+- Safer patterns (often a false positive):
+  - Strong server-side authentication and authorization gates; use of server-derived identity (session, mTLS client cert, verified JWT) rather than client-supplied fields.
+  - Cryptographic verification of inbound messages/tokens (HMAC/signature with key rotation; JWT with issuer/audience/exp checks).
+  - Strict allowlists or mappings from untrusted tokens to internal constants; tenancy/ownership checks enforced server-side.
+  - Secure IPC/webhook verification (mTLS, IP/ASN allowlists plus signature, replay protection).
+- Not sanitizers / insufficient alone:
+  - Client-side checks; base64/URL encoding; logging; length/presence checks; naive regex; trusting Referer/Origin alone; trusting remote IP without trusted proxy config.
+- Context notes:
+  - Identify the security decision point (authN/authZ, resource access, configuration/privilege change).
+  - Canonicalization/normalization should occur before checks (e.g., host/path/tenant). Missing or misplaced checks can still violate the boundary.
+- If key facts are missing (unknown verification step, incomplete path), be conservative: prefer “not a false positive” with Low confidence rather than guess.
+
+Interpretation of fields for this CWE:
+- “Sanitization Found?” = presence of strong boundary controls (server-side authN/Z, cryptographic verification, mTLS, strict allowlists/mappings).
+- “Attack Feasible?” = given the shown code, could an attacker cross the boundary to influence security-sensitive behavior?
+
+Internal reasoning checklist (do NOT include your notes in the output):
+1) Identify the boundary crossed (client→server, external service→backend, low→high privilege, cross-tenant, etc.).
+2) Determine the security decision or sensitive action influenced by the untrusted data.
+3) Check for strong verification/authorization (signature/JWT verify with claims checks, server-derived identity, mTLS, strict allowlist/mapping).
+4) Verify ordering: normalization/verification BEFORE use; ensure no trust is placed in client-controlled headers/tokens without verification.
+5) Decide if a boundary violation enabling privilege/policy bypass is feasible; set confidence based on visible evidence.
+6) Produce the JSON verdict with appropriate confidence.
+
+--------------------------------
+Case to adjudicate (filled from CodeQL)
+--------------------------------
+A potential trust boundary violation vulnerability (CWE-501) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.tainted-session-from-http-request.tainted-session-from-http-request
+Message: Detected input from a HTTPServletRequest going into a session command, like `setAttribute`. User input into such a command could lead to an attacker inputting malicious code into your session parameters, blurring the line between what's trusted and untrusted, and therefore leading to a trust boundary violation. This could lead to programmers trusting unvalidated data. Instead, thoroughly sanitize user input before passing it into such function calls.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest02524 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        String[] values = request.getParameterValues("BenchmarkTest02524");
+        String param;
+        if (values != null && values.length > 0) param = values[0];
+        else param = "";
+
+        String bar = doSomething(request, param);
+
+        // javax.servlet.http.HttpSession.putValue(java.lang.String,java.lang.Object^)
+        request.getSession().putValue("userid", bar);
+
+        response.getWriter()
+                .println(
+                        "Item: 'userid' with value: '"
+                                + org.owasp.benchmark.helpers.Utils.encodeForHTML(bar)
+                                + "' saved in session.");
+    } // end doPost
+
+    private static String doSomething(HttpServletRequest request, String param)
+            throws ServletException, IOException {
+
+        String bar = "";
+        if (param != null) {
+            java.util.List<String> valuesList = new java.util.ArrayList<String>();
+            valuesList.add("safe");
+            valuesList.add(param);
+            valuesList.add("moresafe");
+
+            valuesList.remove(0); // remove the 1st safe value
+
+            bar = valuesList.get(0); // get the param value
+        }
+
+        return bar;
+    }
+}
+
+Vulnerability Location:
+"bar)" in the following line of code (line 51) has been detected by the static analyzer as the vulnerability location:
+
+        request.getSession().putValue("userid", [[[bar]]]);
+
+Dataflow Trace:
+[1] SOURCE:
+if (values != null && values.length > 0) [[[param = values[0];
+]]] // [DATAFLOW STEP]
+
+Message: Source: 'param = values[0];' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:45'
+
+[2] STEP:
+if (values != null && values.length > 0) [[[param ]]]= values[0];
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'param' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:45'
+
+[3] STEP:
+String bar = [[[doSomething(]]]request, param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'doSomething' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:48'
+
+[4] STEP:
+private static String doSomething(HttpServletRequest request, String [[[param)]]]
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'param' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:60'
+
+[5] STEP:
+[[[valuesList.]]]add(param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'valuesList' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:67'
+
+[6] STEP:
+[[[bar ]]]= valuesList.get(0); // get the param value
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'bar' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:72'
+
+[7] STEP:
+String [[[bar ]]]= doSomething(request, param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'bar' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:48'
+
+[8] SINK:
+request.getSession().putValue("userid", [[[bar)]]];
+ // [DATAFLOW STEP]
+
+Message: Sink: 'request.getSession().putValue("userid", bar);' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02524.java:51'
+
+IMPORTANT OUTPUT RULES:
+- Think step-by-step using the checklist, but DO NOT include your intermediate notes.
+- Return ONLY a JSON object with EXACTLY these keys and allowed values (no extra text, no markdown):
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}
