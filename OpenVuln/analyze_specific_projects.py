@@ -37,8 +37,11 @@ def main():
     print()
     
     # Check for API key (command line argument or environment variable)
+    # Skip API key requirement for CLIProxyAPI models (prefix 'cliproxy:')
     api_key = args.api_key or os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
+    is_cliproxy = args.model.startswith("cliproxy:")
+    
+    if not api_key and not is_cliproxy:
         print("❌ OpenRouter API key not found!")
         print("Please provide your API key using one of these methods:")
         print("1. Command line argument: --api-key 'your-api-key-here'")
@@ -46,7 +49,10 @@ def main():
         print("\nGet your API key from: https://openrouter.ai/keys")
         return
     
-    print("✅ OpenRouter API key found!")
+    if is_cliproxy:
+        print("✅ Using CLIProxyAPI mode (http://127.0.0.1:8317)")
+    else:
+        print("✅ OpenRouter API key found!")
     print()
     
     # Initialize the generator
@@ -69,8 +75,12 @@ def main():
     # Update the generator to use only filtered projects
     generator.projects_df = filtered_df
     
-    # Set custom output directory for OpenVuln
-    model_name = args.model.replace("/", "_").replace("-", "_")
+    # Set custom output directory
+    # For cliproxy models, keep the prefix; for others, sanitize slashes
+    if is_cliproxy:
+        model_name = args.model.replace("/", "_").replace("-", "_").replace(":", "_")
+    else:
+        model_name = args.model.replace("/", "_").replace("-", "_")
     p = f"./results/optimized/{model_name}"
     generator.output_path = Path(p)
     

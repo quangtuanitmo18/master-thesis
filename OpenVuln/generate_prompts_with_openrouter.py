@@ -31,6 +31,10 @@ class OpenRouterPromptGenerator:
         self.model = model
         self.base_url = "https://openrouter.ai/api/v1"
         
+        # Skip API key requirement for CLIProxyAPI models
+        if self._is_cliproxy_model(model) and not self.api_key:
+            logger.info("Using CLIProxyAPI mode - API key not required")
+        
         # Load projects info
         self.projects_df = self._load_projects_info()
         
@@ -133,14 +137,23 @@ class OpenRouterPromptGenerator:
     def _generate_prompt(self, template: str, code_context: str) -> str:
         """Generate a prompt by filling the template with code context."""
         return template.replace("{code_context}", code_context)
+    
+    def _is_cliproxy_model(self, model: str) -> bool:
+        """Check if model uses CLIProxyAPI (prefix 'cliproxy:')."""
+        return model.startswith("cliproxy:")
 
     def _call_openrouter_api(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
         """Call OpenRouter API to get AI response."""
+        model = model or self.model
+        
+        # Route to CLIProxyAPI if model has cliproxy prefix
+        if self._is_cliproxy_model(model):
+            actual_model = model.replace("cliproxy:", "")
+            return self._call_cliproxy_api(prompt, actual_model)
+        
         if not self.api_key:
             logger.error("OpenRouter API key not provided")
             return self._generate_fallback_response()
-        
-        model = model or self.model
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -274,6 +287,93 @@ class OpenRouterPromptGenerator:
             logger.error(f"Request data: {json.dumps(data, indent=2)}")
             return self._generate_fallback_response()
 
+    def _call_cliproxy_api(self, prompt: str, model: str) -> Dict[str, Any]:
+        """Call CLIProxyAPI (local proxy server) to get AI response."""
+        base_url = "http://127.0.0.1:8317/v1"
+        
+        headers = {
+            "Authorization": "Bearer your-api-key-1",
+            "Content-Type": "application/json",
+        }
+        
+        data = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False
+        }
+        
+        # Retry logic with exponential backoff
+        max_retries = 5
+        base_delay = 5
+        max_delay = 120
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    f"{base_url}/chat/completions",
+                    headers=headers,
+                    json=data,
+                    timeout=60
+                )
+                
+                # Success - parse and return
+                if response.ok:
+                    result = response.json()
+                    content = result["choices"][0]["message"]["content"]
+                    
+                    # Try to parse as JSON (same logic as OpenRouter)
+                    try:
+                        parsed_response = json.loads(content)
+                        parsed_response.update({"model_used": f"cliproxy:{model}"})
+                        return parsed_response
+                    except json.JSONDecodeError:
+                        # Try extracting from markdown code blocks
+                        import re
+                        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+                        if json_match:
+                            try:
+                                parsed_response = json.loads(json_match.group(1))
+                                parsed_response.update({"model_used": f"cliproxy:{model}"})
+                                return parsed_response
+                            except json.JSONDecodeError:
+                                pass
+                        
+                        # Fallback: return error response
+                        return {
+                            "False Positive": "ERROR",
+                            "Sanitization Found?": "ERROR",
+                            "Attack Feasible?": "ERROR",
+                            "Confidence": "ERROR",
+                            "model_used": f"cliproxy:{model}",
+                        }
+                
+                # Check for retryable errors (429, 500+)
+                is_retryable = response.status_code in [429, 500, 502, 503, 504]
+                
+                if is_retryable and attempt < max_retries - 1:
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.warning(f"CLIProxyAPI error {response.status_code}, retrying in {delay}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"CLIProxyAPI call failed: HTTP {response.status_code}")
+                    return self._generate_fallback_response()
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt < max_retries - 1:
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    logger.warning(f"CLIProxyAPI connection error, retrying in {delay}s: {e}")
+                    time.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"CLIProxyAPI call failed after {max_retries} attempts: {e}")
+                    logger.error("Make sure CLIProxyAPI is running on http://127.0.0.1:8317")
+                    return self._generate_fallback_response()
+        
+        return self._generate_fallback_response()
+    
     def _generate_fallback_response(self) -> Dict[str, Any]:
         """Generate a fallback response when API calls fail."""
         return {
@@ -313,8 +413,8 @@ class OpenRouterPromptGenerator:
         """Process projects and get OpenRouter AI responses."""
         all_results = []
         
-        # Create output directory
-        self.output_path.mkdir(exist_ok=True)
+        # Create output directory (including parents if needed)
+        self.output_path.mkdir(parents=True, exist_ok=True)
         
         projects_to_process = self.projects_df.head(max_projects) if max_projects else self.projects_df
         model_to_use = model or self.model
@@ -360,13 +460,16 @@ class OpenRouterPromptGenerator:
                 response = self._call_openrouter_api(prompt, model_to_use)
                 
                 # Add metadata
+                # Determine AI provider based on model prefix
+                ai_provider = "cliproxy" if self._is_cliproxy_model(model_to_use) else "openrouter"
+                
                 response.update({
                     "project_slug": project_slug,
                     "CVE": cve_id,
                     "CWE": cwe_id,
                     "alert_name": alert_name,
                     "context_file": str(context_file),
-                    "ai_provider": "openrouter",
+                    "ai_provider": ai_provider,
                     "timestamp": pd.Timestamp.now().isoformat()
                 })
                  

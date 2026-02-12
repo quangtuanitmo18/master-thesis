@@ -204,14 +204,19 @@ def main():
     
     args = parser.parse_args()
     
-    # Get API key
+    # Check if any models use CLIProxyAPI (prefix 'cliproxy:')
+    has_cliproxy = any(model.startswith("cliproxy:") for model in args.models)
+    has_openrouter = any(not model.startswith("cliproxy:") for model in args.models)
+    
+    # Get API key - only required if at least one model uses OpenRouter
     api_key = args.api_key or os.getenv("OPENROUTER_API_KEY")
-    if not api_key and not args.dry_run:
+    if has_openrouter and not api_key and not args.dry_run:
         print("❌ OpenRouter API key not found!")
         print("Please provide your API key using one of these methods:")
         print("1. Command line argument: --api-key 'your-api-key-here'")
         print("2. Environment variable: export OPENROUTER_API_KEY='your-api-key-here'")
         print("\nGet your API key from: https://openrouter.ai/keys")
+        print("\nNote: CLIProxyAPI models (cliproxy:*) don't require an API key")
         return
     
     # Show what will be run

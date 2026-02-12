@@ -1,0 +1,204 @@
+System role:
+You are a security analyst adjudicating static analysis alerts for CWE-079 (Cross-Site Scripting).
+Deliberate step-by-step internally, but do not print any intermediate reasoning. Return only the required JSON.
+
+Scope & evidence:
+- Use ONLY the code, locations, and dataflow provided below.
+- Do not assume behavior of code that is not shown (e.g., sanitizer implementations).
+- Base your decision strictly on the provided snippet and trace.
+
+Rubric (CWE-079 micro-rules):
+- XSS occurs when untrusted input is reflected or stored and then rendered into a browser-executed context without appropriate, context-specific encoding/sanitization.
+- High risk (likely NOT a false positive):
+  - Untrusted data sinks into HTML without encoding (e.g., string concatenation into markup, JSP out.println with raw input, innerHTML/document.write).
+  - Untrusted data in event-handler attributes (onclick, onload, etc.) or inside <script> as a JavaScript string/expression.
+  - Untrusted data in URL/JS-creating contexts (e.g., "javascript:" URLs) or dangerous templating with escaping disabled.
+- Safer patterns (often a false positive):
+  - Context-appropriate encoding/sanitization is clearly applied:
+    - HTML element content → HTML entity encoding.
+    - HTML attribute value → attribute encoding and quoting.
+    - JavaScript string context → JS string escaping (and not executed as code).
+    - URL/query parameter context → URL encoding (and, if placed in an attribute, attribute-safe as well).
+    - CSS context → CSS escaping or avoidance.
+  - Safe DOM APIs used (e.g., textContent/innerText instead of innerHTML).
+  - Templating frameworks with auto-escaping ON (e.g., Thymeleaf, Handlebars, React’s default rendering) and no explicit bypass.
+- Not sanitizers / insufficient alone:
+  - Length checks; blacklists of a few characters; HTML encoding used for JS context; URL encoding used for HTML context; naive replace() without covering metacharacters for the target context.
+- If key facts are missing (unknown context, unknown sanitizer), be conservative: prefer “not a false positive” with Low confidence rather than guess.
+
+Internal reasoning checklist (do NOT include your notes in the output):
+1) Identify user-controlled sources and confirm they reach a rendering sink.
+2) Determine the exact rendering context (HTML element content, HTML attribute, JavaScript, URL, CSS, DOM API like innerHTML vs textContent).
+3) Check for context-appropriate encoding/sanitization. Verify it matches the sink’s context.
+4) Consider response/content-type and whether the value is executed by the browser.
+5) Decide if an actual XSS is feasible given the above (e.g., can attacker inject markup/script that will execute?).
+6) Produce the JSON verdict with appropriate confidence.
+
+--------------------------------
+Case to adjudicate (filled from CodeQL)
+--------------------------------
+A potential cross-site scripting vulnerability (CWE-079) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer
+Message: Detected a request with potential user-input going into a OutputStream or Writer object. This bypasses any view or template environments, including HTML escaping, which may expose this application to cross-site scripting (XSS) vulnerabilities. Consider using a view technology such as JavaServer Faces (JSFs) which automatically escapes HTML views.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest02206 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        java.util.Map<String, String[]> map = request.getParameterMap();
+        String param = "";
+        if (!map.isEmpty()) {
+            String[] values = map.get("BenchmarkTest02206");
+            if (values != null) param = values[0];
+        }
+
+        String bar = doSomething(request, param);
+
+        String fileName = org.owasp.benchmark.helpers.Utils.TESTFILES_DIR + bar;
+        java.io.InputStream is = null;
+
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(fileName);
+            is = java.nio.file.Files.newInputStream(path, java.nio.file.StandardOpenOption.READ);
+            byte[] b = new byte[1000];
+            int size = is.read(b);
+            response.getWriter()
+                    .println(
+                            "The beginning of file: '"
+                                    + org.owasp.esapi.ESAPI.encoder().encodeForHTML(fileName)
+                                    + "' is:\n\n");
+            response.getWriter()
+                    .println(org.owasp.esapi.ESAPI.encoder().encodeForHTML(new String(b, 0, size)));
+            is.close();
+        } catch (Exception e) {
+            System.out.println("Couldn't open InputStream on file: '" + fileName + "'");
+            response.getWriter()
+                    .println(
+                            "Problem getting InputStream: "
+                                    + org.owasp
+                                            .esapi
+                                            .ESAPI
+                                            .encoder()
+                                            .encodeForHTML(e.getMessage()));
+        } finally {
+            if (is != null) {
+                try {
+                    is.close();
+                    is = null;
+                } catch (Exception e) {
+                    // we tried...
+                }
+            }
+        }
+    } // end doPost
+
+    private static String doSomething(HttpServletRequest request, String param)
+            throws ServletException, IOException {
+
+        String bar;
+
+        // Simple if statement that assigns constant to bar on true condition
+        int num = 86;
+        if ((7 * 42) - num > 200) bar = "This_should_always_happen";
+        else bar = param;
+
+        return bar;
+    }
+}
+
+Vulnerability Location:
+"System.out.println("Couldn't open InputStream on file: '" + fileName + "'");" in the following line of code (line 69) has been detected by the static analyzer as the vulnerability location:
+
+            [[[System.out.println("Couldn't open InputStream on file: '" + fileName + "'")]]];
+
+Dataflow Trace:
+[1] SOURCE:
+java.util.Map<String, String[]> map = [[[request.getParameterMap();]]]
+ // [DATAFLOW STEP]
+
+Message: Source: 'request.getParameterMap()' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:43'
+
+[2] STEP:
+java.util.Map<String, String[]> [[[map ]]]= request.getParameterMap();
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'map' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:43'
+
+[3] STEP:
+String[] [[[values ]]]= map.get("BenchmarkTest02206");
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'values' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:46'
+
+[4] STEP:
+if (values != null) [[[param ]]]= values[0];
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'param' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:47'
+
+[5] STEP:
+String bar = [[[doSomething(]]]request, param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'doSomething' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:50'
+
+[6] STEP:
+private static String doSomething(HttpServletRequest request, String [[[param)]]]
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'param' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:90'
+
+[7] STEP:
+else [[[bar ]]]= param;
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'bar' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:98'
+
+[8] STEP:
+String [[[bar ]]]= doSomething(request, param);
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'bar' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:50'
+
+[9] STEP:
+String [[[fileName ]]]= org.owasp.benchmark.helpers.Utils.TESTFILES_DIR + bar;
+ // [DATAFLOW STEP]
+
+Message: Propagator : 'fileName' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:52'
+
+[10] SINK:
+[[[System.out.println("Couldn't open InputStream on file: '" + fileName + "'");]]]
+ // [DATAFLOW STEP]
+
+Message: Sink: 'System.out.println("Couldn't open InputStream on file: '" + fileName + "'");' @ 'src\main\java\org\owasp\benchmark\testcode\BenchmarkTest02206.java:69'
+
+IMPORTANT OUTPUT RULES:
+- Think step-by-step using the checklist, but DO NOT include your intermediate notes.
+- Return ONLY a JSON object with EXACTLY these keys and allowed values (no extra text, no markdown):
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}
