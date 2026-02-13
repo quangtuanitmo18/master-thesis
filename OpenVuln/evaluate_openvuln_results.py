@@ -148,25 +148,54 @@ def save_summary_report(metrics, model_name, output_dir):
     summary_df.to_csv(output_path, index=False)
     print(f"💾 Saved summary to: {output_path}")
 
-def main():
-    parser = argparse.ArgumentParser(description="Evaluate OpenVuln LLM results against ground truth")
-    parser.add_argument("--results", required=True, help="Path to LLM results CSV (openrouter_prompts_responses.csv)")
-    parser.add_argument("--ground-truth", default="ground_truth.csv", help="Path to ground truth CSV")
-    parser.add_argument("--model-name", help="Model name for reporting (auto-detected from results if not provided)")
+def scan_and_evaluate_all(results_dir, gt_df):
+    """Scan results directory and evaluate all found results."""
+    results_path = Path(results_dir)
+    if not results_path.exists():
+        print(f"❌ Results directory not found: {results_dir}")
+        return
+
+    print(f"🔍 Scanning for results in: {results_path}")
     
-    args = parser.parse_args()
+    found_any = False
     
-    # Load data
-    gt_df = load_ground_truth(args.ground_truth)
-    llm_df = load_llm_results(args.results)
+    # Walk through results/optimized, results/baseline, etc.
+    for result_type_dir in results_path.iterdir():
+        if not result_type_dir.is_dir() or result_type_dir.name.startswith('.'):
+            continue
+            
+        print(f"\n📂 Checking {result_type_dir.name}...")
+        
+        for model_dir in result_type_dir.iterdir():
+            if not model_dir.is_dir() or model_dir.name.startswith('.'):
+                continue
+                
+            csv_path = model_dir / "openrouter_prompts_responses.csv"
+            if csv_path.exists():
+                found_any = True
+                print(f"  👉 Found results for model: {model_dir.name}")
+                
+                # Check if already evaluated (optional, but good for skipping)
+                # But user asked to run, so we re-run to update.
+                
+                try:
+                    evaluate_single_result(csv_path, gt_df, model_dir.name)
+                except Exception as e:
+                    print(f"  ❌ Error evaluating {model_dir.name}: {e}")
+
+    if not found_any:
+        print("⚠️  No results found. Run analysis first.")
+
+def evaluate_single_result(results_path, gt_df, model_name=None):
+    """Run evaluation for a single results file."""
+    llm_df = load_llm_results(results_path)
     
     # Auto-detect model name from results if not provided
-    if args.model_name:
-        model_name = args.model_name
-    elif 'model_used' in llm_df.columns:
-        model_name = llm_df['model_used'].iloc[0]
-    else:
-        model_name = "Unknown Model"
+    if not model_name:
+        if 'model_used' in llm_df.columns:
+            model_name = llm_df['model_used'].iloc[0]
+        else:
+            model_name = "Unknown Model"
     
     # Merge and evaluate
     merged_df = merge_results_with_ground_truth(llm_df, gt_df)
@@ -176,11 +205,33 @@ def main():
     print_evaluation_report(metrics, model_name)
     
     # Save results
-    output_dir = Path(args.results).parent
+    output_dir = Path(results_path).parent
     save_detailed_results(merged_df, output_dir)
     save_summary_report(metrics, model_name, output_dir)
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate OpenVuln LLM results against ground truth")
+    parser.add_argument("--results", help="Path to LLM results CSV (openrouter_prompts_responses.csv). If not provided, scans 'results/' directory.")
+    parser.add_argument("--ground-truth", default="ground_truth.csv", help="Path to ground truth CSV")
+    parser.add_argument("--model-name", help="Model name for reporting (auto-detected from results if not provided)")
     
-    print("✅ Evaluation complete!")
+    args = parser.parse_args()
+    
+    # Load ground truth once
+    try:
+        gt_df = load_ground_truth(args.ground_truth)
+    except FileNotFoundError:
+        print(f"❌ Ground truth file not found: {args.ground_truth}")
+        return
+
+    if args.results:
+        # Evaluate specific file
+        evaluate_single_result(args.results, gt_df, args.model_name)
+    else:
+        # Auto-scan mode
+        scan_and_evaluate_all("results", gt_df)
+    
+    print("\n✅ All tasks complete!")
 
 if __name__ == "__main__":
     main()

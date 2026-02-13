@@ -19,12 +19,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class OpenRouterPromptGenerator:
-    def __init__(self, base_dir: str = ".", api_key: Optional[str] = None, model: str = "openai/gpt-4o-mini"):
+    def __init__(self, base_dir: str = ".", api_key: Optional[str] = None, model: str = "openai/gpt-4o-mini", prompt_type: str = "optimized"):
         self.base_dir = Path(base_dir)
         self.projects_info_path = self.base_dir / "Projects_info.csv"
-        self.code_contexts_path = self.base_dir / "code-context/optimized"
-        self.prompt_templates_path = self.base_dir / "prompt_templates" / "optimized"
-        self.output_path = self.base_dir / "prompts-responses-openrouter"
+        
+        # Dynamic paths based on prompt_type (optimized vs baseline)
+        self.prompt_type = prompt_type
+        self.code_contexts_path = self.base_dir / "code-context" / prompt_type
+        self.prompt_templates_path = self.base_dir / "prompt_templates" / prompt_type
+        
+        # Default output path (can be overridden)
+        self.output_path = self.base_dir / "results" / prompt_type
         
         # OpenRouter Configuration
         self.api_key = api_key or os.getenv("OPENROUTER_API_KEY")
@@ -315,7 +320,7 @@ class OpenRouterPromptGenerator:
                     f"{base_url}/chat/completions",
                     headers=headers,
                     json=data,
-                    timeout=60
+                    timeout=300
                 )
                 
                 # Success - parse and return
@@ -455,10 +460,42 @@ class OpenRouterPromptGenerator:
                 # Generate prompt
                 prompt = self._generate_prompt(template, code_context)
                 
+                # Save prompt to file
+                prompts_dir = project_dir / "prompts"
+                prompts_dir.mkdir(exist_ok=True)
+                prompt_file = prompts_dir / f"{alert_name}.txt"
+                with open(prompt_file, 'w', encoding='utf-8') as f:
+                    f.write(prompt)
+                
                 # Get OpenRouter AI response
                 logger.info(f"Getting OpenRouter AI response for {alert_name}...")
                 response = self._call_openrouter_api(prompt, model_to_use)
                 
+                # Save raw response content to file
+                responses_dir = project_dir / "responses"
+                responses_dir.mkdir(exist_ok=True)
+                response_file = responses_dir / f"{alert_name}.txt"
+                
+                # We need to extract the raw content from the response object if possible,
+                # but _call_openrouter_api returns a parsed dict.
+                # However, the parsed dict doesn't contain the raw content string easily if it was JSON parsed.
+                # Let's check _call_openrouter_api implementation.
+                # It returns a dict. We might need to modify _call_openrouter_api to return raw content too, 
+                # or just reconstruct it as JSON string. 
+                # But user wants "responses", usually the raw text from LLM.
+                # The current implementation of _call_openrouter_api returns a DICT.
+                # To save the "raw response", I should probably save the JSON representation of the dict 
+                # OR modify _call_openrouter_api to return the raw string as well.
+                # Given I can't easily change _call_openrouter_api signature without breaking things,
+                # I will save the JSON dump of the response dict for now, which is still useful.
+                # ENABLE_RAW_RESPONSE_LOGGING could be better but let's stick to saving what we have.
+                # Actually, the user wants "responses" like OWASP.
+                # In OWASP, we saved the raw text.
+                # Here, `response` is a dict. I will save it as pretty-printed JSON.
+                
+                with open(response_file, 'w', encoding='utf-8') as f:
+                    json.dump(response, f, indent=2)
+
                 # Add metadata
                 # Determine AI provider based on model prefix
                 ai_provider = "cliproxy" if self._is_cliproxy_model(model_to_use) else "openrouter"
@@ -547,11 +584,12 @@ def main():
     parser.add_argument("--model", default="openai/gpt-4o-mini", help="Model to use (default: openai/gpt-4o-mini)")
     parser.add_argument("--max-projects", type=int, help="Maximum number of projects to process")
     parser.add_argument("--delay", type=float, default=1.0, help="Delay between API calls in seconds")
+    parser.add_argument("--prompt-type", default="optimized", choices=["optimized", "baseline"], help="Prompt type to use (optimized or baseline)")
     parser.add_argument("--list-models", action="store_true", help="List available models and exit")
     
     args = parser.parse_args()
     
-    generator = OpenRouterPromptGenerator(api_key=args.api_key, model=args.model)
+    generator = OpenRouterPromptGenerator(api_key=args.api_key, model=args.model, prompt_type=args.prompt_type)
     
     if args.list_models:
         generator.list_available_models()

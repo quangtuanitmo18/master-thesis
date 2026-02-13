@@ -1,0 +1,17 @@
+Based on the provided code and rubric, here is the adjudication:
+
+1.  **Algorithm & Context**: The code explicitly requests the `SHA1` hashing algorithm via `MessageDigest.getInstance("SHA1", ...)`. The hash output is Base64-encoded and written to a file named `passwordFile.txt`, and the HTTP response describes the operation as "'Sensitive value ... hashed and stored". This confirms the context is **password storage** (or storage of sensitive credentials).
+
+2.  **Security Assessment**: 
+    *   **Weak Algorithm**: SHA-1 is a fast, general-purpose hash function that is considered cryptographically broken for collision resistance and, more importantly for password storage, is too fast (allowing high-speed offline cracking).
+    *   **Missing Mitigations**: There is no evidence of a Password Key Derivation Function (KDF) like PBKDF2, bcrypt, or Argon2. The hash is computed directly on the input (`md.update(input); md.digest()`), making it vulnerable to rainbow table attacks and brute-force cracking.
+    *   **Dataflow**: The `doSomething` method simulates data processing but contains logic that effectively hardcodes the input to the string `"bob"` (via `switch(guess.charAt(1))` where `guess` is `"ABC"`). While this breaks the flow of user input (`param`), the vulnerability flagged is the **Use of Weak Hash** (CWE-328) in a security-sensitive context. The implementation of a password storage mechanism using raw SHA-1 is a valid finding regardless of the specific test data ("bob") currently flowing through it.
+
+3.  **Conclusion**: The use of SHA-1 for password storage is a high-risk security flaw. The code demonstrates an insecure cryptographic implementation.
+
+{
+  "False Positive": "No",
+  "Sanitization Found?": "No",
+  "Attack Feasible?": "Yes",
+  "Confidence": "High"
+}

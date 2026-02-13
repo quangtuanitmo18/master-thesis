@@ -1,0 +1,19 @@
+Based on the provided code and dataflow trace, here is the adjudication:
+
+1.  **Dataflow Analysis**: The user input (`param`) flows into a local variable `bar`, which is then concatenated into an LDAP filter string (`filter`). This filter is used to execute an LDAP search via `idc.search()`. The results of the search are iterated, and attributes (`uid`, `street`) are retrieved from the directory entries found. Finally, these retrieved attributes (`attr.get()`, `attr2.get()`) are written to the HTTP response using `response.getWriter().println()`.
+
+2.  **Vulnerability Verification**:
+    *   **Reflected XSS**: For Reflected XSS to occur, the user input must be echoed back in the response. In this code, the user input is used as a *lookup key* (part of the query filter), not as the content being displayed. The output consists of data retrieved from the LDAP server (database). Unless the LDAP server echoes the query filter in the attribute values (which is not standard behavior), the malicious input script does not reach the sink.
+    *   **LDAP Injection**: The code *is* vulnerable to LDAP Injection because `bar` is concatenated directly into the filter without escaping. However, the static analysis rule is checking for CWE-079 (XSS).
+    *   **Stored XSS**: If the LDAP directory contained malicious scripts in the `uid` or `street` attributes, they would be rendered without encoding (a Stored XSS vulnerability). However, the static analysis alert identifies the source as `request.getParameterMap()`, implying a Reflected XSS dataflow. Since the request data does not flow to the sink, the specific flagged chain is invalid.
+
+3.  **Sanitization**: There is no HTML encoding applied to `attr.get()` at the sink (line 75). (Note: The `if (!found)` block *does* use `ESAPI.encoder().encodeForHTML(filter)`, but that is a different branch). Despite the lack of encoding at the detected sink, the vulnerability is a False Positive regarding the *source* being the request parameter.
+
+4.  **Conclusion**: The alert is a False Positive for Reflected XSS because the tainted request data is consumed by the search operation and does not propagate to the output. The output is determined by the database content, not the request string itself.
+
+{
+  "False Positive": "Yes",
+  "Sanitization Found?": "No",
+  "Attack Feasible?": "No",
+  "Confidence": "High"
+}

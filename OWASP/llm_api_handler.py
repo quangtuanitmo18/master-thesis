@@ -1518,8 +1518,8 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
         client = OpenAI(
             base_url="http://127.0.0.1:8317/v1",  # Local CLIProxyAPI endpoint
             api_key="your-api-key-1",  # Hard-coded API key for local use
-            timeout=30.0,  # 30 second timeout
-            max_retries=2  # Retry up to 2 times on transient failures
+            timeout=300.0,  # 300 second timeout
+            max_retries=5  # Retry up to 5 times on transient failures
         )
     except Exception as e:
         print(f"Error creating CLIProxyAPI client: {e}")

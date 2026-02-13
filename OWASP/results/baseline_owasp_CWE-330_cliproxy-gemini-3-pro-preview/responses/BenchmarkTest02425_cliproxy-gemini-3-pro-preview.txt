@@ -1,0 +1,17 @@
+The finding identifies the use of `java.util.Random` for generating a value used as a "rememberMe" cookie and session attribute.
+
+1.  **Vulnerability Analysis**: The code generates a random integer `r` using `new java.util.Random().nextInt()`. `java.util.Random` is a pseudo-random number generator (PRNG) that is not cryptographically secure; its output can be predicted if the seed (often based on time) is known or if enough previous values are observed.
+2.  **Context**: This random value is converted to a string `rememberMeKey` and used to create a `javax.servlet.http.Cookie` named "rememberMe..." and stored in the user's session.
+3.  **Security Implication**: "Remember Me" tokens are authentication credentials. Using a predictable RNG for credentials allows attackers to predict valid tokens for other users. While this specific snippet stores the token in the HTTP Session (which is protected by the container's session ID), the explicit generation of a security token using `java.util.Random` constitutes a valid CWE-330 vulnerability. The code pattern represents insecure credential generation.
+4.  **User Input**: User input (`param`) is retrieved and sanitized using `ESAPI.encoder().encodeForHTML`, but this input does not influence the random number generation. The RNG issue is independent of user input.
+
+The finding is a **True Positive**. The use of `java.util.Random` for security-sensitive tokens (like "rememberMe") is insecure.
+
+```json
+{
+  "False Positive": "No",
+  "Sanitization Found?": "No",
+  "Attack Feasible?": "Yes",
+  "Confidence": "High"
+}
+```

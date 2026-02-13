@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--api-key", help="OpenRouter API key")
     parser.add_argument("--model", default="openai/gpt-4o-mini", help="Model to use")
     parser.add_argument("--delay", type=float, default=2.0, help="Delay between API calls")
+    parser.add_argument("--prompt-type", default="optimized", choices=["optimized", "baseline"], help="Prompt type to use (optimized or baseline)")
     
     args = parser.parse_args()
     
@@ -34,6 +35,7 @@ def main():
     print("🎯 Analyzing Specific Projects with OpenRouter")
     print("=" * 50)
     print(f"Target projects: {len(target_projects)}")
+    print(f"Prompt type: {args.prompt_type}")
     print()
     
     # Check for API key (command line argument or environment variable)
@@ -56,7 +58,7 @@ def main():
     print()
     
     # Initialize the generator
-    generator = OpenRouterPromptGenerator(api_key=api_key, model=args.model)
+    generator = OpenRouterPromptGenerator(api_key=api_key, model=args.model, prompt_type=args.prompt_type)
     
     # Filter the projects dataframe to only include target projects
     original_df = generator.projects_df
@@ -81,7 +83,9 @@ def main():
         model_name = args.model.replace("/", "_").replace("-", "_").replace(":", "_")
     else:
         model_name = args.model.replace("/", "_").replace("-", "_")
-    p = f"./results/optimized/{model_name}"
+    
+    # Use prompt_type in output path
+    p = f"./results/{args.prompt_type}/{model_name}"
     generator.output_path = Path(p)
     
     print("🚀 Starting analysis...")
