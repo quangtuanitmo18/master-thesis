@@ -1,4 +1,5 @@
 test_name,response_file,ground_truth_category,ground_truth_is_vulnerable,ground_truth_cwe,ground_truth_expected,llm_Attack Feasible?,llm_Confidence,llm_False Positive,llm_Sanitization Found?
+BenchmarkTest01051,BenchmarkTest01051_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00375,BenchmarkTest00375_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00390,BenchmarkTest00390_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00157,BenchmarkTest00157_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
@@ -10,6 +11,10 @@ BenchmarkTest00547,BenchmarkTest00547_cliproxy-qwen3-coder-flash.txt,xss,True,79
 BenchmarkTest00284,BenchmarkTest00284_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00544,BenchmarkTest00544_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00030,BenchmarkTest00030_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest01052,BenchmarkTest01052_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
+BenchmarkTest01057,BenchmarkTest01057_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest01047,BenchmarkTest01047_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest01055,BenchmarkTest01055_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00812,BenchmarkTest00812_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00147,BenchmarkTest00147_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00800,BenchmarkTest00800_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
@@ -23,6 +28,7 @@ BenchmarkTest00645,BenchmarkTest00645_cliproxy-qwen3-coder-flash.txt,xss,True,79
 BenchmarkTest00378,BenchmarkTest00378_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00541,BenchmarkTest00541_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00553,BenchmarkTest00553_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
+BenchmarkTest01053,BenchmarkTest01053_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00715,BenchmarkTest00715_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00036,BenchmarkTest00036_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00809,BenchmarkTest00809_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
@@ -50,6 +56,7 @@ BenchmarkTest00723,BenchmarkTest00723_cliproxy-qwen3-coder-flash.txt,xss,False,7
 BenchmarkTest00813,BenchmarkTest00813_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00155,BenchmarkTest00155_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00384,BenchmarkTest00384_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
+BenchmarkTest01049,BenchmarkTest01049_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00279,BenchmarkTest00279_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00380,BenchmarkTest00380_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,No,High,Yes,No
 BenchmarkTest00555,BenchmarkTest00555_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
@@ -57,6 +64,7 @@ BenchmarkTest00806,BenchmarkTest00806_cliproxy-qwen3-coder-flash.txt,xss,True,79
 BenchmarkTest00803,BenchmarkTest00803_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00478,BenchmarkTest00478_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00808,BenchmarkTest00808_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
+BenchmarkTest01050,BenchmarkTest01050_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00048,BenchmarkTest00048_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00394,BenchmarkTest00394_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,No,High,Yes,No
 BenchmarkTest00047,BenchmarkTest00047_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
@@ -91,6 +99,7 @@ BenchmarkTest00556,BenchmarkTest00556_cliproxy-qwen3-coder-flash.txt,xss,False,7
 BenchmarkTest00151,BenchmarkTest00151_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
 BenchmarkTest00728,BenchmarkTest00728_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,No,High,Yes,No
 BenchmarkTest00281,BenchmarkTest00281_cliproxy-qwen3-coder-flash.txt,xss,False,79,Safe,Yes,High,No,No
+BenchmarkTest01056,BenchmarkTest01056_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00392,BenchmarkTest00392_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00720,BenchmarkTest00720_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No
 BenchmarkTest00287,BenchmarkTest00287_cliproxy-qwen3-coder-flash.txt,xss,True,79,Vulnerable,Yes,High,No,No

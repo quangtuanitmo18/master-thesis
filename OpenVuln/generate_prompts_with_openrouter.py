@@ -296,13 +296,21 @@ class OpenRouterPromptGenerator:
         """Call CLIProxyAPI (local proxy server) to get AI response."""
         base_url = "http://127.0.0.1:8317/v1"
         
+        # Auto-prepend 'gemini-' prefix for Claude Sonnet models via CLIProxyAPI
+        # This allows using shorter names like 'claude-sonnet-4-5' instead of 'gemini-claude-sonnet-4-5'
+        # Only apply prefix for API call, keep original model name for file naming/display
+        api_model = model
+        if model in ["claude-sonnet-4-5", "claude-sonnet-4-5-thinking"]:
+            api_model = f"gemini-{model}"
+            logger.info(f"Auto-prepended 'gemini-' prefix for API call: {api_model}")
+        
         headers = {
             "Authorization": "Bearer your-api-key-1",
             "Content-Type": "application/json",
         }
         
         data = {
-            "model": model,
+            "model": api_model,  # Use api_model with prefix for API call
             "messages": [
                 {"role": "user", "content": prompt}
             ],

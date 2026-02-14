@@ -1560,11 +1560,19 @@ def send_to_cliproxyapi(prompt, model, temperature=None, enable_token_counting=T
             print(f"Warning: Could not count input tokens: {e}")
             input_tokens = None
     
+    # Auto-prepend 'gemini-' prefix for Claude Sonnet models via CLIProxyAPI
+    # This allows using shorter names like 'claude-sonnet-4-5' instead of 'gemini-claude-sonnet-4-5'
+    # Only apply prefix for API call, keep original model name for file naming/display
+    api_model = model
+    if model in ["claude-sonnet-4-5", "claude-sonnet-4-5-thinking"]:
+        api_model = f"gemini-{model}"
+        print(f"  Auto-prepended 'gemini-' prefix for API call: {api_model}")
+    
     # Prepare API call parameters in OpenAI-compatible format
     # CLIProxyAPI uses the same API format as OpenAI for compatibility
     # Ensure stream is always False (non-streaming mode)
     api_params = {
-        "model": model,  # Model name as understood by CLIProxyAPI
+        "model": api_model,  # Use api_model with prefix for API call
         "messages": [
             {"role": "system", "content": "You are a security assistant."},
             {"role": "user", "content": prompt}

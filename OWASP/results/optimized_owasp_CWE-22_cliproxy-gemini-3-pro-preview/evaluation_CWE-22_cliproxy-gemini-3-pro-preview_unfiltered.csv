@@ -5,6 +5,7 @@ BenchmarkTest00697,BenchmarkTest00697_cliproxy-gemini-3-pro-preview.txt,pathtrav
 BenchmarkTest01159,BenchmarkTest01159_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
 BenchmarkTest01117,BenchmarkTest01117_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest02464,BenchmarkTest02464_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
+BenchmarkTest00061,BenchmarkTest00061_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest00950,BenchmarkTest00950_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest00624,BenchmarkTest00624_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01987,BenchmarkTest01987_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
@@ -42,6 +43,7 @@ BenchmarkTest02466,BenchmarkTest02466_cliproxy-gemini-3-pro-preview.txt,pathtrav
 BenchmarkTest00951,BenchmarkTest00951_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
 BenchmarkTest01988,BenchmarkTest01988_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest02109,BenchmarkTest02109_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
+BenchmarkTest02302,BenchmarkTest02302_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01232,BenchmarkTest01232_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest02106,BenchmarkTest02106_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01642,BenchmarkTest01642_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
@@ -132,6 +134,7 @@ BenchmarkTest01408,BenchmarkTest01408_cliproxy-gemini-3-pro-preview.txt,pathtrav
 BenchmarkTest00458,BenchmarkTest00458_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
 BenchmarkTest01571,BenchmarkTest01571_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01498,BenchmarkTest01498_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
+BenchmarkTest01985,BenchmarkTest01985_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,No,High,Yes,No
 BenchmarkTest02560,BenchmarkTest02560_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01028,BenchmarkTest01028_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
 BenchmarkTest00221,BenchmarkTest00221_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
@@ -180,6 +183,7 @@ BenchmarkTest00045,BenchmarkTest00045_cliproxy-gemini-3-pro-preview.txt,pathtrav
 BenchmarkTest00455,BenchmarkTest00455_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest00452,BenchmarkTest00452_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01646,BenchmarkTest01646_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
+BenchmarkTest00863,BenchmarkTest00863_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,Yes,High,No,No
 BenchmarkTest00359,BenchmarkTest00359_cliproxy-gemini-3-pro-preview.txt,pathtraver,True,22,Vulnerable,Yes,High,No,No
 BenchmarkTest01035,BenchmarkTest01035_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
 BenchmarkTest01406,BenchmarkTest01406_cliproxy-gemini-3-pro-preview.txt,pathtraver,False,22,Safe,No,High,Yes,No
