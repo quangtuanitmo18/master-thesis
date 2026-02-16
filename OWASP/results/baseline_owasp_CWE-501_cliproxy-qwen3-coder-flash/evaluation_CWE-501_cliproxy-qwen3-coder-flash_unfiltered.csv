@@ -6,6 +6,9 @@ BenchmarkTest00756,BenchmarkTest00756_cliproxy-qwen3-coder-flash.txt,trustbound,
 BenchmarkTest00993,BenchmarkTest00993_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest01711,BenchmarkTest01711_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
 BenchmarkTest00834,BenchmarkTest00834_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
+BenchmarkTest02262,BenchmarkTest02262_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
+BenchmarkTest02524,BenchmarkTest02524_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
+BenchmarkTest02447,BenchmarkTest02447_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,Yes,Yes
 BenchmarkTest01300,BenchmarkTest01300_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest01145,BenchmarkTest01145_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,Yes,High,No,No
 BenchmarkTest01456,BenchmarkTest01456_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
@@ -39,10 +42,13 @@ BenchmarkTest01143,BenchmarkTest01143_cliproxy-qwen3-coder-flash.txt,trustbound,
 BenchmarkTest01457,BenchmarkTest01457_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
 BenchmarkTest01377,BenchmarkTest01377_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest02167,BenchmarkTest02167_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes
+BenchmarkTest02168,BenchmarkTest02168_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest01873,BenchmarkTest01873_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest01454,BenchmarkTest01454_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,Yes,High,No,No
 BenchmarkTest02084,BenchmarkTest02084_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes
 BenchmarkTest00836,BenchmarkTest00836_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
+BenchmarkTest02623,BenchmarkTest02623_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,Yes,Yes
+BenchmarkTest02525,BenchmarkTest02525_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
 BenchmarkTest00253,BenchmarkTest00253_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,Yes,High,No,No
 BenchmarkTest01146,BenchmarkTest01146_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,Yes,High,No,No
 BenchmarkTest01206,BenchmarkTest01206_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
@@ -53,4 +59,5 @@ BenchmarkTest01619,BenchmarkTest01619_cliproxy-qwen3-coder-flash.txt,trustbound,
 BenchmarkTest02085,BenchmarkTest02085_cliproxy-qwen3-coder-flash.txt,trustbound,False,501,Safe,No,High,No,Yes
 BenchmarkTest00424,BenchmarkTest00424_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
 BenchmarkTest00324,BenchmarkTest00324_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
+BenchmarkTest02526,BenchmarkTest02526_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,No,High,No,Yes
 BenchmarkTest01299,BenchmarkTest01299_cliproxy-qwen3-coder-flash.txt,trustbound,True,501,Vulnerable,Yes,High,No,No
