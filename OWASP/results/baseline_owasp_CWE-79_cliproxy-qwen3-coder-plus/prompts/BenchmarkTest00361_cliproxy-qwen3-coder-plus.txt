@@ -1,0 +1,116 @@
+You are a static analysis assistant reviewing code scan results.
+
+A potential cross-site scripting vulnerability (CWE-079) was detected by the static analyzer, as described below. Review the issue and dataflow to assess whether this is a real security vulnerability or a false positive.
+
+---
+Rule ID: java.lang.security.audit.xss.no-direct-response-writer.no-direct-response-writer
+Message: Detected a request with potential user-input going into a OutputStream or Writer object. This bypasses any view or template environments, including HTML escaping, which may expose this application to cross-site scripting (XSS) vulnerabilities. Consider using a view technology such as JavaServer Faces (JSFs) which automatically escapes HTML views.
+
+Vulnerable Code Snippet:
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+public class BenchmarkTest00361 extends HttpServlet {
+
+    private static final long serialVersionUID = 1L;
+
+    @Override
+    public void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    public void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        String param = request.getParameter("BenchmarkTest00361");
+        if (param == null) param = "";
+
+        String bar;
+        String guess = "ABC";
+        char switchTarget = guess.charAt(1); // condition 'B', which is safe
+
+        // Simple case statement that assigns param to bar on conditions 'A', 'C', or 'D'
+        switch (switchTarget) {
+            case 'A':
+                bar = param;
+                break;
+            case 'B':
+                bar = "bob";
+                break;
+            case 'C':
+            case 'D':
+                bar = param;
+                break;
+            default:
+                bar = "bob's your uncle";
+                break;
+        }
+
+        String fileName = null;
+        java.io.FileInputStream fis = null;
+
+        try {
+            fileName = org.owasp.benchmark.helpers.Utils.TESTFILES_DIR + bar;
+            fis = new java.io.FileInputStream(fileName);
+            byte[] b = new byte[1000];
+            int size = fis.read(b);
+            response.getWriter()
+                    .println(
+                            "The beginning of file: '"
+                                    + org.owasp.esapi.ESAPI.encoder().encodeForHTML(fileName)
+                                    + "' is:\n\n");
+            response.getWriter()
+                    .println(org.owasp.esapi.ESAPI.encoder().encodeForHTML(new String(b, 0, size)));
+        } catch (Exception e) {
+            System.out.println("Couldn't open FileInputStream on file: '" + fileName + "'");
+            //			System.out.println("File exception caught and swallowed: " + e.getMessage());
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close();
+                    fis = null;
+                } catch (Exception e) {
+                    // we tried...
+                }
+            }
+        }
+    }
+}
+
+Vulnerability Location:
+"System.out.println("Couldn't open FileInputStream on file: '" + fileName + "'");" in the following line of code (line 83) has been detected by the static analyzer as the vulnerability location:
+
+            [[[System.out.println("Couldn't open FileInputStream on file: '" + fileName + "'")]]];
+
+Questions for Review:
+
+Is this finding likely a false positive?
+(Answer "Yes" or "No" and explain your reasoning.)
+
+What is the role of the user-controlled input, and how does it flow through the program?
+(Summarize how the data moves through the trace.)
+
+Is there any sanitization, validation, or filtering step applied to the data?
+(If yes, mention where and what it is.)
+
+Does this code actually allow a real XSS attack, or does it look like a safe pattern?
+(Consider if the input can actually be used to inject malicious scripts.)
+
+How confident are you in your assessment? (Low / Medium / High)
+
+IMPORTANT: You must respond with a JSON object containing exactly these keys and no others:
+
+{
+  "False Positive": "Yes" or "No",
+  "Sanitization Found?": "Yes" or "No" or "Unsure",
+  "Attack Feasible?": "Yes" or "No",
+  "Confidence": "Low" or "Medium" or "High"
+}
+
+Do not include any text before or after the JSON. Do not use markdown formatting. Return only the JSON object. 
