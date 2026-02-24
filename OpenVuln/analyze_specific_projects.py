@@ -39,11 +39,12 @@ def main():
     print()
     
     # Check for API key (command line argument or environment variable)
-    # Skip API key requirement for CLIProxyAPI models (prefix 'cliproxy:')
+    # Skip API key requirement for CLIProxyAPI models (prefix 'cliproxy:') and Groq models (prefix 'groq:')
     api_key = args.api_key or os.getenv("OPENROUTER_API_KEY")
     is_cliproxy = args.model.startswith("cliproxy:")
+    is_groq = args.model.startswith("groq:")
     
-    if not api_key and not is_cliproxy:
+    if not api_key and not is_cliproxy and not is_groq:
         print("❌ OpenRouter API key not found!")
         print("Please provide your API key using one of these methods:")
         print("1. Command line argument: --api-key 'your-api-key-here'")
@@ -53,6 +54,15 @@ def main():
     
     if is_cliproxy:
         print("✅ Using CLIProxyAPI mode (http://127.0.0.1:8317)")
+    elif is_groq:
+        print("✅ Using Groq API mode (https://api.groq.com)")
+        # Check for Groq API key
+        groq_key = os.getenv("GROQ_API_KEY")
+        if not groq_key:
+            print("❌ GROQ_API_KEY environment variable not found!")
+            print("Please set it: export GROQ_API_KEY='your-groq-api-key'")
+            print("Get your API key from: https://console.groq.com/keys")
+            return
     else:
         print("✅ OpenRouter API key found!")
     print()
@@ -78,8 +88,8 @@ def main():
     generator.projects_df = filtered_df
     
     # Set custom output directory
-    # For cliproxy models, keep the prefix; for others, sanitize slashes
-    if is_cliproxy:
+    # For cliproxy and groq models, keep the prefix; for others, sanitize slashes
+    if is_cliproxy or is_groq:
         model_name = args.model.replace("/", "_").replace("-", "_").replace(":", "_")
     else:
         model_name = args.model.replace("/", "_").replace("-", "_")

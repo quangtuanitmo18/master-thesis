@@ -204,9 +204,11 @@ def main():
     
     args = parser.parse_args()
     
-    # Check if any models use CLIProxyAPI (prefix 'cliproxy:')
+    # Check model types
     has_cliproxy = any(model.startswith("cliproxy:") for model in args.models)
-    has_openrouter = any(not model.startswith("cliproxy:") for model in args.models)
+    has_groq = any(model.startswith("groq:") for model in args.models)
+    # OpenRouter is implied if it's not cliproxy and not groq
+    has_openrouter = any(not model.startswith("cliproxy:") and not model.startswith("groq:") for model in args.models)
     
     # Get API key - only required if at least one model uses OpenRouter
     api_key = args.api_key or os.getenv("OPENROUTER_API_KEY")
@@ -216,7 +218,7 @@ def main():
         print("1. Command line argument: --api-key 'your-api-key-here'")
         print("2. Environment variable: export OPENROUTER_API_KEY='your-api-key-here'")
         print("\nGet your API key from: https://openrouter.ai/keys")
-        print("\nNote: CLIProxyAPI models (cliproxy:*) don't require an API key")
+        print("\nNote: CLIProxyAPI models (cliproxy:*) and Groq models (groq:*) don't require this key")
         return
     
     # Show what will be run

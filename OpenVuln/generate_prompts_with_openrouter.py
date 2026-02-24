@@ -14,6 +14,9 @@ from typing import Dict, List, Any, Optional
 import requests
 import time
 
+# Import Groq helper
+from groq_helper import GroqAPIHelper, GROQ_MODELS
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -146,10 +149,19 @@ class OpenRouterPromptGenerator:
     def _is_cliproxy_model(self, model: str) -> bool:
         """Check if model uses CLIProxyAPI (prefix 'cliproxy:')."""
         return model.startswith("cliproxy:")
+    
+    def _is_groq_model(self, model: str) -> bool:
+        """Check if model uses Groq API (prefix 'groq:')."""
+        return model.startswith("groq:")
 
     def _call_openrouter_api(self, prompt: str, model: Optional[str] = None) -> Dict[str, Any]:
         """Call OpenRouter API to get AI response."""
         model = model or self.model
+        
+        # Route to Groq API if model has groq prefix
+        if self._is_groq_model(model):
+            actual_model = model.replace("groq:", "")
+            return self._call_groq_api(prompt, actual_model)
         
         # Route to CLIProxyAPI if model has cliproxy prefix
         if self._is_cliproxy_model(model):
@@ -387,6 +399,72 @@ class OpenRouterPromptGenerator:
         
         return self._generate_fallback_response()
     
+    def _call_groq_api(self, prompt: str, model: str) -> Dict[str, Any]:
+        """Call Groq API to get AI response."""
+        try:
+            # Initialize Groq helper
+            groq_helper = GroqAPIHelper(api_key=os.getenv("GROQ_API_KEY"))
+            
+            # Call Groq API
+            response = groq_helper.chat_completion(
+                model=model,
+                prompt=prompt,
+                temperature=0.7,
+                max_tokens=4096,
+                timeout=60
+            )
+            
+            content = response["content"]
+            
+            # Try to parse as JSON (same logic as other APIs)
+            try:
+                parsed_response = json.loads(content)
+                parsed_response.update({"model_used": f"groq:{model}"})
+                return parsed_response
+            except json.JSONDecodeError:
+                # Try extracting from markdown code blocks
+                import re
+                json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
+                if json_match:
+                    try:
+                        parsed_response = json.loads(json_match.group(1))
+                        parsed_response.update({"model_used": f"groq:{model}"})
+                        return parsed_response
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Try to extract JSON-like content
+                json_pattern = r'\{[^{}]*"False Positive"[^{}]*\}'
+                json_matches = re.findall(json_pattern, content, re.DOTALL)
+                
+                for json_str in json_matches:
+                    try:
+                        json_str = json_str.strip()
+                        parsed_response = json.loads(json_str)
+                        
+                        # Validate required fields
+                        required_fields = ["False Positive", "Sanitization Found?", "Attack Feasible?", "Confidence"]
+                        if all(field in parsed_response for field in required_fields):
+                            parsed_response.update({"model_used": f"groq:{model}"})
+                            return parsed_response
+                    except json.JSONDecodeError:
+                        continue
+                
+                # If all parsing fails, wrap in error response
+                logger.warning(f"Could not parse Groq response as JSON. Content: {content[:200]}")
+                return {
+                    "False Positive": "ERROR",
+                    "Sanitization Found?": "ERROR",
+                    "Attack Feasible?": "ERROR",
+                    "Confidence": "ERROR",
+                    "model_used": f"groq:{model}",
+                    "raw_response": content[:500]
+                }
+        
+        except Exception as e:
+            logger.error(f"Groq API call failed: {e}")
+            return self._generate_fallback_response()
+    
     def _generate_fallback_response(self) -> Dict[str, Any]:
         """Generate a fallback response when API calls fail."""
         return {
@@ -491,14 +569,6 @@ class OpenRouterPromptGenerator:
                 # It returns a dict. We might need to modify _call_openrouter_api to return raw content too, 
                 # or just reconstruct it as JSON string. 
                 # But user wants "responses", usually the raw text from LLM.
-                # The current implementation of _call_openrouter_api returns a DICT.
-                # To save the "raw response", I should probably save the JSON representation of the dict 
-                # OR modify _call_openrouter_api to return the raw string as well.
-                # Given I can't easily change _call_openrouter_api signature without breaking things,
-                # I will save the JSON dump of the response dict for now, which is still useful.
-                # ENABLE_RAW_RESPONSE_LOGGING could be better but let's stick to saving what we have.
-                # Actually, the user wants "responses" like OWASP.
-                # In OWASP, we saved the raw text.
                 # Here, `response` is a dict. I will save it as pretty-printed JSON.
                 
                 with open(response_file, 'w', encoding='utf-8') as f:
