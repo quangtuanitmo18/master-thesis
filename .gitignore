@@ -258,6 +258,8 @@ OWASP/dashboard-data/*
 !OWASP/dashboard-data/.gitkeep
 OWASP/dashboard-data_backup/*
 !OWASP/dashboard-data_backup/.gitkeep
+OWASP/results_test/*
+OpenVuln/results_test/*
 
 # OpenVuln Results
 OpenVuln/results/*

@@ -1,6 +1,6 @@
 {
-  "False Positive": "Yes",
+  "False Positive": "No",
   "Sanitization Found?": "No",
-  "Attack Feasible?": "No",
+  "Attack Feasible?": "Yes",
   "Confidence": "High"
 }

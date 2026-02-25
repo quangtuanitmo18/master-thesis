@@ -54,12 +54,12 @@ def load_model_data(result_type, model_names):
             # Load summary
             summary_df = pd.read_csv(summary_path)
             metrics = summary_df.iloc[0].to_dict()
-            metrics['Model'] = model_name
+            metrics['Model'] = model_name.replace('cliproxy_', '').replace('cliproxy-', '')
             all_metrics.append(metrics)
             
             # Load detailed
             detailed_df = pd.read_csv(detailed_path)
-            detailed_df['Model'] = model_name
+            detailed_df['Model'] = model_name.replace('cliproxy_', '').replace('cliproxy-', '')
             all_detailed.append(detailed_df)
             
         except Exception as e:
@@ -149,6 +149,48 @@ def main():
                 title="Accuracy by CWE"
             )
             st.plotly_chart(fig_cwe, use_container_width=True)
+
+        st.markdown("---")
+
+        # === Horizontal Bar Charts: Recall, Precision, F1-Score (side-by-side) ===
+        st.subheader(f"📊 Model Comparison: Recall, Precision & F1-Score — [{selected_type}]")
+        
+        hbar_col1, hbar_col2, hbar_col3 = st.columns(3)
+        
+        bar_color_map = {
+            'recall': '#4A7FB5',
+            'precision': '#6BAED6',
+            'f1_score': '#2C4A6E'
+        }
+        
+        for col_widget, metric_name, chart_title in [
+            (hbar_col1, 'recall', 'Recall'),
+            (hbar_col2, 'precision', 'Precision'),
+            (hbar_col3, 'f1_score', 'F1-Score')
+        ]:
+            with col_widget:
+                sorted_data = metrics_df.sort_values(metric_name, ascending=True)
+                
+                fig_hbar = go.Figure(go.Bar(
+                    x=sorted_data[metric_name],
+                    y=sorted_data['Model'],
+                    orientation='h',
+                    marker_color=bar_color_map[metric_name],
+                    text=sorted_data[metric_name].round(3),
+                    textposition='outside',
+                    textfont=dict(size=11)
+                ))
+                
+                fig_hbar.update_layout(
+                    title=dict(text=chart_title, font=dict(size=14)),
+                    xaxis=dict(range=[0, 1.15], title='', dtick=0.5),
+                    yaxis=dict(title=''),
+                    height=max(350, len(sorted_data) * 35 + 80),
+                    margin=dict(l=10, r=40, t=40, b=30),
+                    showlegend=False
+                )
+                
+                st.plotly_chart(fig_hbar, use_container_width=True, key=f"hbar_{metric_name}")
 
         st.markdown("---")
 

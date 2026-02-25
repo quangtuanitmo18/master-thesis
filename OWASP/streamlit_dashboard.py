@@ -131,7 +131,7 @@ def load_experiment_data():
             df['dataset'] = dataset
             df['run_id'] = run_id
             df['cwe'] = cwe
-            df['model'] = model
+            df['model'] = model.replace('cliproxy-', '')
             df['file_path'] = str(file_path)
             
             all_data.append(df)
@@ -151,10 +151,12 @@ def load_experiment_data():
     
     for (prompt_version, dataset, run_id, cwe, model), group in combined_df.groupby(['prompt_version', 'dataset', 'run_id', 'cwe', 'model']):
         # Calculate confusion matrix from individual test results
-        tp = 0  # True Positives: LLM says vulnerable, actually vulnerable
-        fp = 0  # False Positives: LLM says vulnerable, actually safe
-        tn = 0  # True Negatives: LLM says safe, actually safe
-        fn = 0  # False Negatives: LLM says safe, actually vulnerable
+        # Convention: Positive = LLM identifies alert as False Positive (safe)
+        # This aligns with the thesis topic: "FP identification/detection"
+        tp = 0  # True Positives: LLM says FP (safe), actually safe → correct FP identification
+        fp = 0  # False Positives: LLM says FP (safe), actually vulnerable → missed real vuln!
+        tn = 0  # True Negatives: LLM says not FP (vuln), actually vulnerable → correctly kept
+        fn = 0  # False Negatives: LLM says not FP (vuln), actually safe → missed FP
         
         # Count confusion matrix elements
         for _, row in group.iterrows():
@@ -166,6 +168,7 @@ def load_experiment_data():
                 is_vulnerable = bool(gt_vuln)
             
             # Determine LLM prediction based on available columns
+            # llm_prediction = True means LLM says "Attack Feasible" (= NOT a false positive)
             llm_prediction = None
             
             if 'llm_Attack Feasible?' in row and pd.notna(row['llm_Attack Feasible?']):
@@ -175,14 +178,16 @@ def load_experiment_data():
             else:
                 continue  # Skip if we can't determine prediction
             
-            if llm_prediction and is_vulnerable:
-                tn += 1
-            elif llm_prediction and not is_vulnerable:
-                fn += 1
-            elif not llm_prediction and not is_vulnerable:
-                tp += 1
+            # llm_prediction=True → LLM says "not FP" (vulnerable)
+            # llm_prediction=False → LLM says "FP" (safe) → this is the "Positive" class
+            if not llm_prediction and not is_vulnerable:
+                tp += 1  # LLM says FP, actually safe → correct FP identification
             elif not llm_prediction and is_vulnerable:
-                fp += 1
+                fp += 1  # LLM says FP, actually vulnerable → dangerous miss!
+            elif llm_prediction and is_vulnerable:
+                tn += 1  # LLM says not FP, actually vulnerable → correctly kept
+            elif llm_prediction and not is_vulnerable:
+                fn += 1  # LLM says not FP, actually safe → missed FP
         
         # Calculate metrics
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0
@@ -418,7 +423,7 @@ def main():
     st.header("📊 Interactive Visualizations")
     
     # Tab layout for different visualizations
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
         "🎯 Performance Metrics", 
         "📊 Custom Score Analysis", 
         "🔍 Confusion Matrix", 
@@ -426,7 +431,8 @@ def main():
         "📋 Data Table",
         "🗂️ Dataset Analysis",
         "🔥 Interactive Heatmaps",
-        "📊 Comprehensive Tables"
+        "📊 Comprehensive Tables",
+        "🗺️ CWE × Model Heatmap"
     ])
     
     with tab1:
@@ -498,6 +504,70 @@ def main():
             )
             fig.update_xaxes(tickangle=45)
             st.plotly_chart(fig, use_container_width=True, key="model_metrics")
+            
+            # === Horizontal Bar Charts: Recall, Precision, F1-Score (side-by-side) ===
+            # Show which prompt versions are selected
+            active_prompt_versions = ', '.join(sorted(filtered_df['prompt_version'].unique()))
+            st.subheader(f"📊 Model Comparison: Recall, Precision & F1-Score — [{active_prompt_versions}]")
+            
+            # Build data with all 3 metrics per model (reuse aggregated confusion matrix)
+            all_metrics_data = []
+            for model_name, model_group in filtered_df.groupby('model'):
+                total_tp = model_group['TP'].sum()
+                total_fp = model_group['FP'].sum()
+                total_tn = model_group['TN'].sum()
+                total_fn = model_group['FN'].sum()
+                
+                m_precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0
+                m_recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0
+                m_f1 = 2 * (m_precision * m_recall) / (m_precision + m_recall) if (m_precision + m_recall) > 0 else 0
+                
+                all_metrics_data.append({
+                    'model': model_name,
+                    'recall': m_recall,
+                    'precision': m_precision,
+                    'f1_score': m_f1
+                })
+            
+            all_metrics_df = pd.DataFrame(all_metrics_data)
+            
+            # Create 3 columns for side-by-side charts
+            hbar_col1, hbar_col2, hbar_col3 = st.columns(3)
+            
+            bar_color_map = {
+                'recall': '#4A7FB5',      # medium blue
+                'precision': '#6BAED6',    # lighter blue
+                'f1_score': '#2C4A6E'      # dark blue
+            }
+            
+            for col_widget, metric_name, chart_title in [
+                (hbar_col1, 'recall', 'Recall'),
+                (hbar_col2, 'precision', 'Precision'),
+                (hbar_col3, 'f1_score', 'F1-Score')
+            ]:
+                with col_widget:
+                    sorted_df = all_metrics_df.sort_values(metric_name, ascending=True)  # ascending for bottom-to-top
+                    
+                    fig_hbar = go.Figure(go.Bar(
+                        x=sorted_df[metric_name],
+                        y=sorted_df['model'],
+                        orientation='h',
+                        marker_color=bar_color_map[metric_name],
+                        text=sorted_df[metric_name].round(3),
+                        textposition='outside',
+                        textfont=dict(size=11)
+                    ))
+                    
+                    fig_hbar.update_layout(
+                        title=dict(text=chart_title, font=dict(size=14)),
+                        xaxis=dict(range=[0, 1.15], title='', dtick=0.5),
+                        yaxis=dict(title=''),
+                        height=max(350, len(sorted_df) * 35 + 80),
+                        margin=dict(l=10, r=40, t=40, b=30),
+                        showlegend=False
+                    )
+                    
+                    st.plotly_chart(fig_hbar, use_container_width=True, key=f"hbar_{metric_name}")
             
             # Also show detailed breakdown by CWE
             st.subheader(f"Detailed {selected_metric.replace('_', ' ').title()} by Model and CWE")
@@ -1718,6 +1788,123 @@ def main():
                 csv_data,
                 "cwe_model_pivot_table.csv",
                 "text/csv"
+            )
+    
+    with tab9:
+        st.subheader("🗺️ CWE × Model Heatmap")
+        st.markdown("Visualize performance metrics as a heatmap with **CWE types as rows** and **Models as columns**.")
+        
+        # Controls
+        hm_col1, hm_col2 = st.columns(2)
+        
+        with hm_col1:
+            hm_metric = st.selectbox(
+                "Select Metric",
+                ['accuracy', 'precision', 'recall', 'f1_score'],
+                format_func=lambda x: x.replace('_', ' ').title(),
+                key='cwe_model_hm_metric'
+            )
+        
+        with hm_col2:
+            hm_prompt_versions = sorted(filtered_df['prompt_version'].unique().tolist())
+            hm_prompt_options = ['All'] + hm_prompt_versions
+            hm_selected_prompt = st.selectbox(
+                "Select Prompt Version",
+                hm_prompt_options,
+                key='cwe_model_hm_prompt'
+            )
+        
+        # Filter by prompt version if needed
+        hm_df = filtered_df.copy()
+        if hm_selected_prompt != 'All':
+            hm_df = hm_df[hm_df['prompt_version'] == hm_selected_prompt]
+        
+        if hm_df.empty:
+            st.warning("No data available for the selected filters.")
+        else:
+            # Aggregate confusion matrix per (CWE, Model) and recalculate metrics
+            hm_agg = hm_df.groupby(['cwe', 'model']).agg(
+                total_tp=('TP', 'sum'),
+                total_fp=('FP', 'sum'),
+                total_tn=('TN', 'sum'),
+                total_fn=('FN', 'sum')
+            ).reset_index()
+            
+            # Calculate metrics from aggregated confusion matrix
+            hm_agg['precision'] = hm_agg['total_tp'] / (hm_agg['total_tp'] + hm_agg['total_fp'])
+            hm_agg['recall'] = hm_agg['total_tp'] / (hm_agg['total_tp'] + hm_agg['total_fn'])
+            hm_agg['accuracy'] = (hm_agg['total_tp'] + hm_agg['total_tn']) / (
+                hm_agg['total_tp'] + hm_agg['total_tn'] + hm_agg['total_fp'] + hm_agg['total_fn']
+            )
+            hm_agg['f1_score'] = 2 * (hm_agg['precision'] * hm_agg['recall']) / (
+                hm_agg['precision'] + hm_agg['recall']
+            )
+            hm_agg = hm_agg.fillna(0)
+            
+            # Pivot to CWE (rows) × Model (columns)
+            hm_pivot = hm_agg.pivot(index='cwe', columns='model', values=hm_metric).fillna(0)
+            
+            # Sort CWE rows by numeric part
+            def cwe_sort_key(cwe_str):
+                try:
+                    return int(cwe_str.split('-')[-1])
+                except (ValueError, IndexError):
+                    return 0
+            
+            hm_pivot = hm_pivot.loc[sorted(hm_pivot.index, key=cwe_sort_key)]
+            
+            # Create heatmap using plotly
+            fig_hm = px.imshow(
+                hm_pivot.round(3),
+                text_auto='.3f',
+                color_continuous_scale='Blues',
+                aspect='auto',
+                labels=dict(
+                    x='Model',
+                    y='CWE',
+                    color=hm_metric.replace('_', ' ').title()
+                ),
+                title=f"{hm_metric.replace('_', ' ').title()} — CWE × Model" + (
+                    f" [{hm_selected_prompt}]" if hm_selected_prompt != 'All' else " [All Prompt Versions]"
+                )
+            )
+            
+            fig_hm.update_layout(
+                height=max(450, len(hm_pivot.index) * 55 + 120),
+                xaxis=dict(side='bottom', tickangle=45),
+                yaxis=dict(autorange='reversed'),
+                margin=dict(l=80, r=30, t=60, b=120),
+                font=dict(size=12)
+            )
+            
+            fig_hm.update_traces(textfont=dict(size=11))
+            
+            st.plotly_chart(fig_hm, use_container_width=True, key='cwe_model_heatmap')
+            
+            # Data table below
+            with st.expander("📊 Show Data Table", expanded=False):
+                st.dataframe(hm_pivot.round(3), use_container_width=True)
+            
+            # Summary row
+            hm_s1, hm_s2, hm_s3, hm_s4 = st.columns(4)
+            flat_vals = hm_pivot.values.flatten()
+            with hm_s1:
+                st.metric("Mean", f"{flat_vals.mean():.3f}")
+            with hm_s2:
+                st.metric("Median", f"{np.median(flat_vals):.3f}")
+            with hm_s3:
+                st.metric("Min", f"{flat_vals.min():.3f}")
+            with hm_s4:
+                st.metric("Max", f"{flat_vals.max():.3f}")
+            
+            # Export
+            csv_hm = hm_pivot.to_csv()
+            st.download_button(
+                "💾 Download CWE×Model Heatmap CSV",
+                csv_hm,
+                f"cwe_model_heatmap_{hm_metric}_{hm_selected_prompt}.csv",
+                "text/csv",
+                key='cwe_model_hm_download'
             )
     
     # Footer

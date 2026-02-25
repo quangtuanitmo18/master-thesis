@@ -47,25 +47,32 @@ def merge_results_with_ground_truth(llm_df, gt_df):
     return merged
 
 def calculate_metrics(merged_df):
-    """Calculate TP, TN, FP, FN and metrics."""
+    """Calculate TP, TN, FP, FN and metrics.
+    
+    Convention: Positive = LLM identifies alert as False Positive (safe)
+    - TP: LLM says FP (safe), actually safe → correct FP identification
+    - FP: LLM says FP (safe), actually vulnerable → missed real vuln!
+    - TN: LLM says not FP (vuln), actually vulnerable → correctly kept
+    - FN: LLM says not FP (vuln), actually safe → missed FP
+    """
     
     # LLM prediction: "False Positive" column
-    # - "No" means LLM thinks it's VULNERABLE (not a false positive)
-    # - "Yes" means LLM thinks it's NOT VULNERABLE (false positive)
+    # - "No" means LLM thinks it's VULNERABLE (not a false positive) → Negative class
+    # - "Yes" means LLM thinks it's NOT VULNERABLE (false positive) → Positive class
     
     # Ground truth: is_vulnerable column
     # - True = actually vulnerable
-    # - False = not vulnerable
+    # - False = not vulnerable (= actual false positive from SAST)
     
     # Convert LLM's "False Positive" to predicted vulnerability
     merged_df['llm_predicts_vulnerable'] = merged_df['False Positive'] == 'No'
     merged_df['actually_vulnerable'] = merged_df['is_vulnerable'] == True
     
-    # Calculate confusion matrix
-    tp = len(merged_df[(merged_df['llm_predicts_vulnerable'] == True) & (merged_df['actually_vulnerable'] == True)])
-    tn = len(merged_df[(merged_df['llm_predicts_vulnerable'] == False) & (merged_df['actually_vulnerable'] == False)])
-    fp = len(merged_df[(merged_df['llm_predicts_vulnerable'] == True) & (merged_df['actually_vulnerable'] == False)])
-    fn = len(merged_df[(merged_df['llm_predicts_vulnerable'] == False) & (merged_df['actually_vulnerable'] == True)])
+    # Positive class = LLM says FP (safe) = NOT llm_predicts_vulnerable
+    tp = len(merged_df[(merged_df['llm_predicts_vulnerable'] == False) & (merged_df['actually_vulnerable'] == False)])  # LLM says FP, actually safe
+    fp = len(merged_df[(merged_df['llm_predicts_vulnerable'] == False) & (merged_df['actually_vulnerable'] == True)])   # LLM says FP, actually vulnerable!
+    tn = len(merged_df[(merged_df['llm_predicts_vulnerable'] == True) & (merged_df['actually_vulnerable'] == True)])    # LLM says not FP, actually vulnerable
+    fn = len(merged_df[(merged_df['llm_predicts_vulnerable'] == True) & (merged_df['actually_vulnerable'] == False)])   # LLM says not FP, actually safe
     
     # Calculate metrics
     total = tp + tn + fp + fn
@@ -116,12 +123,12 @@ def save_detailed_results(merged_df, output_dir):
         'is_vulnerable', 'llm_predicts_vulnerable', 'actually_vulnerable'
     ]].copy()
     
-    # Add classification result
+    # Add classification result (Positive = FP identification)
     result_df['classification'] = result_df.apply(
         lambda row: 
-            'TP' if row['llm_predicts_vulnerable'] and row['actually_vulnerable'] else
-            'TN' if not row['llm_predicts_vulnerable'] and not row['actually_vulnerable'] else
-            'FP' if row['llm_predicts_vulnerable'] and not row['actually_vulnerable'] else
+            'TP' if not row['llm_predicts_vulnerable'] and not row['actually_vulnerable'] else
+            'FP' if not row['llm_predicts_vulnerable'] and row['actually_vulnerable'] else
+            'TN' if row['llm_predicts_vulnerable'] and row['actually_vulnerable'] else
             'FN',
         axis=1
     )
